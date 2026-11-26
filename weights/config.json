@@ -1,11 +1,26 @@
 {
- "name": "stencil-v1",
- "width": 96,
- "blocks": 5,
- "val_start": 2020,
- "schedule": "1:12,2:6,4:6,6:6",
- "rain_weight": 3.0,
- "seed": 0,
- "lr": 0.001,
- "batch": 32
+ "name": "stencil-ens_v1_s1_adv1",
+ "members": [
+  {
+   "file": "model_0.pt",
+   "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "from": "v1"
+  },
+  {
+   "file": "model_1.pt",
+   "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "from": "v1s1"
+  },
+  {
+   "file": "model_2.pt",
+   "width": 96,
+   "blocks": 4,
+   "advect": true,
+   "from": "adv1"
+  }
+ ]
 }
