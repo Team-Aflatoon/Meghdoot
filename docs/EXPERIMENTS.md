@@ -124,3 +124,14 @@ In winter it drifts over the open sea and partly off the grid (the box touches t
 judge's metric it "does not propagate". Demo it in a monsoon scenario (e.g. Konkan, July 2021).
 
 ens5 per-channel skill (dense 144, pooled leads): t2m +0.132, tp −0.015, u10 +0.132, v10 +0.133, msl +0.144, tcwv +0.149 (rain is the weakest channel).
+
+## Capacity and training-length probes (single members, held-out 2020–21, dense 144)
+
+| run | change vs v1 | pooled SS | per-lead SS | CSI skill | verdict |
+|---|---|---:|---:|---:|---|
+| v1 | baseline (96 wide, 5 blocks, 30 epochs) | +0.076 | +0.014 | +0.085 | – |
+| w128 | width 128 | +0.069 | +0.008 | +0.078 | rejected (worse on all three) |
+| long50 | 50 epochs (1:20, 2:10, 4:10, 6:10) | +0.069 | +0.008 | +0.082 | rejected (overfits) |
+
+Evidence strength: one seed each. The seed spread of single members is about ±0.003 dense SS (v1 +0.076, v1s1 +0.073,
+adv1s1 +0.075), so both are below the seed range. With about 5,500 training days, more capacity or more epochs does not help.
