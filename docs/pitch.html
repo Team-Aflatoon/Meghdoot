@@ -140,13 +140,13 @@
   </div>
   <p style="font-size:23px; margin:0 0 8px"><b class="blue">Organisers' own scoring code, held-out 2020–21.</b> <span class="muted">The shipped model never saw those years (trained on 2005–2019).</span></p>
   <div class="row" style="gap:16px">
-    <div class="card grow"><div class="bigb">+0.154</div><div class="lab">skill vs best of persistence / climatology</div><div class="sub">pooled, 144 windows</div></div>
-    <div class="card grow"><div class="bigb">+0.105</div><div class="lab">heavy-rain CSI skill</div><div class="sub">&gt; 10 mm/day</div></div>
+    <div class="card grow"><div class="bigb">+0.156</div><div class="lab">skill vs best of persistence / climatology</div><div class="sub">pooled, 144 windows</div></div>
+    <div class="card grow"><div class="bigb">+0.107</div><div class="lab">heavy-rain CSI skill</div><div class="sub">&gt; 10 mm/day</div></div>
     <div class="card grow"><div class="bigb">10/10</div><div class="lab">anti-blur</div><div class="sub">day-8 detail kept</div></div>
-    <div class="card grow"><div class="bigb">13.39<span style="font-size:30px">/15</span></div><div class="lab">shock causality</div><div class="sub">72 windows, all seasons</div></div>
+    <div class="card grow"><div class="bigb">13.59<span style="font-size:30px">/15</span></div><div class="lab">shock causality</div><div class="sub">72 windows, all seasons</div></div>
     <div class="card grow"><div class="bigb">+0.267</div><div class="lab">gate: beats persistence</div><div class="sub">at day 4</div></div>
   </div>
-  <p style="margin-top:12px; margin-bottom:0; font-size:24px">Offline Docker judge replica (4 CPU, 6 GB, read-only): <b class="acc">0.25 s per call · 199 MB</b>, kit validator passes.</p>
+  <p style="margin-top:12px; margin-bottom:0; font-size:24px">Offline Docker judge replica (4 CPU, 6 GB, read-only): <b class="acc">0.51–0.66 s per call · 209 MB</b>, kit validator passes.</p>
 </section>
 
 <!-- ================= 4. HOW IT WORKS ================= -->
@@ -183,8 +183,8 @@
     <text x="700" y="276" fill="#ffb11f" font-size="24" text-anchor="middle" font-weight="700">repeat for N days (day 1 → 10+), each step from the gated state</text>
   </svg>
   <div class="row" style="margin-top:6px">
-    <div class="card grow"><div class="lab" style="margin:0"><b class="acc">Ensemble of 5</b>, rollouts averaged</div>
-      <div class="sub" style="font-size:22px; color:#f3f7fc">3 plain members (reach 6 cells/day) + 2 <b>wind-advection</b> members: semi-Lagrangian carry along the 10 m wind, ≤ 2 cells/day, then a CNN residual (reach 8)</div></div>
+    <div class="card grow"><div class="lab" style="margin:0"><b class="acc">Ensemble of 10</b>, rollouts averaged</div>
+      <div class="sub" style="font-size:22px; color:#f3f7fc">6 plain members (reach 6 cells/day) + 4 <b>wind-advection</b> members (semi-Lagrangian carry along the 10 m wind, ≤ 2 cells/day, then a CNN residual; reach 8). A shock's response comes from one member.</div></div>
     <div class="card grow"><div class="lab" style="margin:0"><b class="acc">Trained on what is scored</b></div>
       <div class="sub" style="font-size:22px; color:#f3f7fc"><b>metric-aligned loss</b>: error ÷ best baseline, the judge's own skill ratio; unrolled 1 → 2 → 4 → 8 days</div></div>
   </div>
@@ -239,10 +239,10 @@
   <h1 style="margin-bottom:14px">Arabian Sea +2.5 °C: the deck's own test</h1>
   <div class="row" style="align-items:flex-start; gap:18px">
     <div style="width:300px">
-      <div class="card" style="margin-bottom:14px"><div class="big" style="font-size:54px">100%</div><div class="lab">localised · stable · no teleport</div><div class="sub">72 windows; "spreads" check passes 29%. Previous ensemble</div></div>
-      <div class="card"><div class="lab" style="margin:0"><b>Warm Bay of Bengal</b><br><span class="muted" style="font-size:21px">official shock, all seasons (ens5sk)</span></div>
-        <div class="row" style="gap:18px; margin-top:8px"><div><div class="bigb" style="font-size:40px">88%</div><div class="sub">propagates</div></div>
-        <div><div class="bigb" style="font-size:40px">99%</div><div class="sub">stable</div></div></div></div>
+      <div class="card" style="margin-bottom:14px"><div class="big" style="font-size:54px">100%</div><div class="lab">localised · stable · no teleport</div><div class="sub">72 windows; "spreads" check passes 39%</div></div>
+      <div class="card"><div class="lab" style="margin:0"><b>Warm Bay of Bengal</b><br><span class="muted" style="font-size:21px">official shock, all seasons (ens10sk)</span></div>
+        <div class="row" style="gap:18px; margin-top:8px"><div><div class="bigb" style="font-size:40px">93%</div><div class="sub">propagates</div></div>
+        <div><div class="bigb" style="font-size:40px">94%</div><div class="sub">stable</div></div></div></div>
     </div>
     <!-- schematic maps: x = (lon-64)*11, y = (37-lat)*11 -->
     <svg width="820" height="420" viewBox="0 0 820 420" aria-label="Seasonal transport of the Arabian Sea anomaly">
@@ -304,8 +304,8 @@
       <p class="note" style="margin-bottom:6px">Brier skill vs normal odds, 2021 (fit 2020)</p>
       <table class="t">
         <tr><th>day</th><th>1</th><th>4</th><th>8</th></tr>
-        <tr><td>P(heavy rain)</td><td class="acc">+0.343</td><td>+0.032</td><td>+0.006</td></tr>
-        <tr><td>P(heat)</td><td class="acc">+0.624</td><td>+0.197</td><td>+0.055</td></tr>
+        <tr><td>P(heavy rain)</td><td class="acc">+0.350</td><td>+0.032</td><td>+0.006</td></tr>
+        <tr><td>P(heat)</td><td class="acc">+0.633</td><td>+0.212</td><td>+0.059</td></tr>
       </table>
       <p class="note" style="margin-top:10px">Beats normal odds at every lead.</p>
     </div>
@@ -325,21 +325,21 @@
         <rect x="40" y="258" width="70" height="12" fill="#a9c0dc"/>
         <rect x="140" y="216" width="70" height="54" fill="#a9c0dc"/>
         <rect x="240" y="184" width="70" height="86" fill="#a9c0dc"/>
-        <rect x="340" y="166" width="70" height="104" fill="#5cb8ff"/>
+        <rect x="340" y="162" width="70" height="108" fill="#5cb8ff"/>
         <text x="75" y="250" fill="#f3f7fc" font-size="24" text-anchor="middle" font-weight="700">+0.014</text>
         <text x="175" y="208" fill="#f3f7fc" font-size="24" text-anchor="middle" font-weight="700">+0.058</text>
         <text x="275" y="176" fill="#f3f7fc" font-size="24" text-anchor="middle" font-weight="700">+0.092</text>
-        <text x="375" y="158" fill="#5cb8ff" font-size="24" text-anchor="middle" font-weight="700">+0.112</text>
+        <text x="375" y="154" fill="#5cb8ff" font-size="24" text-anchor="middle" font-weight="700">+0.116</text>
         <text x="75" y="294" fill="#a9c0dc" font-size="19" text-anchor="middle">old single</text>
         <text x="175" y="294" fill="#a9c0dc" font-size="19" text-anchor="middle">old ens5</text>
         <text x="275" y="294" fill="#a9c0dc" font-size="19" text-anchor="middle">new single</text>
-        <text x="375" y="294" fill="#5cb8ff" font-size="19" text-anchor="middle">ens5sk</text>
+        <text x="375" y="294" fill="#5cb8ff" font-size="19" text-anchor="middle">ens10sk</text>
       </svg>
     </div>
     <div class="grow">
       <ul>
         <li><b>Day 8 ≈ climatology.</b> Day 1 is strong; late leads are not.</li>
-        <li><b>Monsoon-stall shock</b> propagates only <span class="acc">28%</span> of the time: energy stays near the box on the grid's western edge.</li>
+        <li><b>Monsoon-stall shock</b> propagates only <span class="acc">39%</span> of the time: energy stays near the box on the grid's western edge.</li>
         <li><b>No ocean model:</b> a warm-sea anomaly fades in ~4–5 days.</li>
         <li><b>1° daily means</b> can't resolve cyclone cores.</li>
         <li><b>Tried and rejected:</b> damping toward climatology, all-years retrain. Both cost causality.</li>
@@ -356,7 +356,7 @@
   <div class="row" style="flex-wrap:wrap; gap:22px">
     <div class="card" style="width:564px"><div class="bigb" style="font-size:40px">Ocean memory</div><div class="lab">carry sea-surface temperature so warm seas persist instead of fading in days</div></div>
     <div class="card" style="width:564px"><div class="bigb" style="font-size:40px">0.25° grid</div><div class="lab">finer cells for coasts, ghats and cyclone structure</div></div>
-    <div class="card" style="width:564px"><div class="bigb" style="font-size:40px">Bigger ensemble</div><div class="lab">larger, more diverse members for calibrated uncertainty at long leads</div></div>
+    <div class="card" style="width:564px"><div class="bigb" style="font-size:40px">More diverse members</div><div class="lab">beyond 10 members, with different architectures, for calibrated uncertainty at long leads</div></div>
     <div class="card" style="width:564px"><div class="bigb" style="font-size:40px">District impact</div><div class="lab">IMD district boundaries and daily-max temperature in the co-pilot</div></div>
   </div>
   <p style="margin-top:26px">The local-stencil guarantee carries over to all of these: <b class="acc">shocks still travel at a bounded speed.</b></p>
