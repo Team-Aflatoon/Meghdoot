@@ -1,86 +1,84 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <link rel="icon" href="data:,">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Climate Digital Twin</title>
+  <title>Meghdoot, the Multiverse of Monsoon climate twin</title>
+  <meta name="description" content="Roll India's weather forward ten days, paint a shock, and watch it ripple across the country.">
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1 id="appTitle">Climate Digital Twin</h1>
-      <span class="sub" id="scenSub">Loading scenarios…</span>
+      <h1 id="appTitle">Meghdoot</h1>
+      <p class="sub" id="scenSub">Loading scenarios…</p>
     </div>
-    <div class="status" id="statusBar">
-      <span class="dot" id="apiDot" title="API status"></span>
-      <span id="apiText">checking…</span>
-      <span class="sep">|</span>
-      <span>model <b id="modelName">—</b></span>
-      <span class="sep">|</span>
-      <span>inference <b id="infMs">—</b></span>
-      <span class="sep">|</span>
-      <span>steps <b id="stepsTxt">—</b></span>
-      <label class="baseurl">API <input id="baseUrl" type="text" spellcheck="false"></label>
-    </div>
+    <dl class="status" id="statusBar">
+      <div class="stat"><dt>API</dt><dd><span class="dot" id="apiDot"></span><span id="apiText">checking…</span></dd></div>
+      <div class="stat"><dt>Model</dt><dd class="measured" id="modelName">…</dd></div>
+      <div class="stat"><dt>Inference</dt><dd class="measured" id="infMs">…</dd></div>
+      <div class="stat"><dt>Days</dt><dd class="measured" id="stepsTxt">…</dd></div>
+      <div class="stat stat--url"><dt><label for="baseUrl">Server</label></dt><dd><input id="baseUrl" type="text" spellcheck="false" class="measured"></dd></div>
+    </dl>
   </header>
 
-  <div class="offline-banner" id="offlineBanner" hidden>
-    SERVER OFFLINE — cannot reach <span id="offlineUrl"></span>/health. No model output is shown until the live
-    <code>/simulate</code> endpoint is reachable. Start it with <code>python serve.py --port 8000</code>.
+  <div class="offline-banner" id="offlineBanner" role="alert" hidden>
+    Server offline: cannot reach <span id="offlineUrl" class="measured"></span>/health. No model output is shown until the live
+    <code>/simulate</code> endpoint answers. Start it with <code>python serve.py --port 8000</code>.
   </div>
 
   <div class="layout">
-    <aside class="sidebar">
+    <aside class="rail" aria-label="Controls">
       <section class="card">
         <h2>Scenario</h2>
-        <label>Start state<select id="scenSel"></select></label>
+        <label class="field">Start state<select id="scenSel"></select></label>
         <div class="row2">
-          <label>Channel<select id="chSel"></select></label>
-          <label>Days (N)<input id="stepsIn" type="number" min="1" max="30" value="10"></label>
+          <label class="field">Channel<select id="chSel"></select></label>
+          <label class="field">Days<input id="stepsIn" type="number" min="1" max="30" value="10"></label>
         </div>
-        <div class="toggles">
+        <fieldset class="toggles">
+          <legend class="visually-hidden">Map layers</legend>
           <label><input type="checkbox" id="obsTog"> Observed</label>
           <label><input type="checkbox" id="arrowTog"> Wind arrows</label>
           <label><input type="checkbox" id="smoothTog"> Smooth</label>
           <label><input type="checkbox" id="regionTog"> Regions</label>
           <label><input type="checkbox" id="cityTog" checked> Cities</label>
-        </div>
+        </fieldset>
       </section>
 
-      <section class="card">
-        <h2>Shock painter</h2>
-        <div class="presets">
-          <button data-preset="bob" class="chip">Warm Bay of Bengal</button>
-          <button data-preset="stall" class="chip">Monsoon stall</button>
-          <button data-preset="zero" class="chip">Zero shock</button>
+      <section class="card card--shock">
+        <h2>Shock</h2>
+        <div class="presets" role="group" aria-label="Shock presets">
+          <button type="button" data-preset="bob" class="chip">Warm Bay of Bengal</button>
+          <button type="button" data-preset="stall" class="chip">Monsoon stall</button>
+          <button type="button" data-preset="zero" class="chip">Zero shock</button>
         </div>
-        <p class="hint">Or drag a rectangle on any map to set the shock box.</p>
-        <div class="boxline">Box: <b id="boxTxt">none</b></div>
+        <p class="hint">Or drag a rectangle on any map to set the box.</p>
+        <p class="boxline">Box <b id="boxTxt" class="measured">none</b></p>
         <div class="row3">
-          <label>Channel<select id="pChSel"></select></label>
-          <label>Mode<select id="pModeSel">
+          <label class="field">Channel<select id="pChSel"></select></label>
+          <label class="field">Mode<select id="pModeSel">
             <option value="add">+ physical</option>
             <option value="pct">% of last day</option>
           </select></label>
-          <label>Value <span id="pUnit" class="unit"></span><input id="pVal" type="number" step="any" value="3"></label>
+          <label class="field">Value <span id="pUnit" class="unit"></span><input id="pVal" type="number" step="any" value="3"></label>
         </div>
-        <button id="addComp" class="secondary">Add to shock</button>
+        <button type="button" id="addComp" class="btn">Add to shock</button>
         <ul id="compList" class="complist"></ul>
-        <div class="pertstats" id="pertStats"></div>
-        <button id="runBtn" class="primary">Run multiverse ▶</button>
-        <div class="runmsg" id="runMsg"></div>
+        <p class="pertstats" id="pertStats"></p>
+        <button type="button" id="runBtn" class="btn btn--primary">Run multiverse</button>
+        <p class="runmsg" id="runMsg" aria-live="polite"></p>
       </section>
 
       <section class="card">
         <h2>Day</h2>
         <div class="dayrow">
-          <button id="playBtn" class="secondary icon" title="Play / pause (space)">▶</button>
-          <input id="daySl" type="range" min="1" max="10" value="1">
-          <span class="dayval" id="dayTxt">1</span>
+          <button type="button" id="playBtn" class="btn btn--icon" aria-label="Play or pause (space)"></button>
+          <input id="daySl" type="range" min="1" max="10" value="1" aria-label="Forecast day">
+          <output class="dayval measured" id="dayTxt" for="daySl">1</output>
         </div>
-        <div class="datetxt" id="dateTxt"></div>
+        <p class="datetxt" id="dateTxt"></p>
       </section>
     </aside>
 
@@ -88,56 +86,58 @@
       <div class="panels" id="panels">
         <figure class="panel" data-kind="obs" id="panelObs" hidden>
           <figcaption><span class="ptitle">Observed</span><span class="psub" id="subObs"></span></figcaption>
-          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
-          <canvas class="legend"></canvas>
+          <div class="cwrap"><canvas class="map" aria-label="Map of the observed weather"></canvas><div class="overlay"></div></div>
+          <canvas class="legend" aria-hidden="true"></canvas>
         </figure>
         <figure class="panel" data-kind="prime">
           <figcaption><span class="ptitle">Timeline Prime</span><span class="psub" id="subPrime">unshocked rollout</span></figcaption>
-          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
-          <canvas class="legend"></canvas>
+          <div class="cwrap"><canvas class="map" aria-label="Map of the unshocked rollout"></canvas><div class="overlay"></div></div>
+          <canvas class="legend" aria-hidden="true"></canvas>
         </figure>
         <figure class="panel" data-kind="multi">
           <figcaption><span class="ptitle">Multiverse</span><span class="psub" id="subMulti">shocked rollout</span></figcaption>
-          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
-          <canvas class="legend"></canvas>
+          <div class="cwrap"><canvas class="map" aria-label="Map of the shocked rollout"></canvas><div class="overlay"></div></div>
+          <canvas class="legend" aria-hidden="true"></canvas>
         </figure>
-        <figure class="panel" data-kind="delta">
+        <figure class="panel panel--lead" data-kind="delta">
           <figcaption><span class="ptitle">Δ Multiverse − Prime</span><span class="psub" id="subDelta"></span></figcaption>
-          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
-          <canvas class="legend"></canvas>
+          <div class="cwrap"><canvas class="map" aria-label="Map of the difference the shock makes"></canvas><div class="overlay"></div></div>
+          <canvas class="legend" aria-hidden="true"></canvas>
         </figure>
       </div>
-      <div class="readout" id="readout">Hover a map to read values. Drag on a map to paint a shock box.</div>
+      <div class="readout measured" id="readout" aria-live="polite">Hover a map to read values. Drag on a map to paint a shock box.</div>
       <div class="risknote" id="riskNote" hidden></div>
 
       <section class="card city">
         <div class="cityhead">
           <h2>City forecast</h2>
-          <select id="citySel" title="Pick a city (or click a city dot on any map)"></select>
-          <div class="citysum" id="citySum"></div>
+          <select id="citySel" aria-label="City"></select>
+          <p class="citysum" id="citySum"></p>
         </div>
-        <canvas id="cityCv"></canvas>
+        <canvas id="cityCv" aria-label="Daily temperature and rain for the selected city"></canvas>
         <p class="foot" id="cityFoot"></p>
       </section>
 
       <div class="lower">
         <section class="card spread">
-          <h2>Spread of the shock <span class="h2sub">— response energy near vs far from the box</span></h2>
-          <canvas id="spreadCv"></canvas>
-          <div class="reachrow" id="reachRow"></div>
+          <h2>Spread of the shock</h2>
+          <p class="h2sub">Response energy near and far from the box</p>
+          <canvas id="spreadCv" aria-label="Chart of how far the shock spreads each day"></canvas>
+          <p class="reachrow measured" id="reachRow"></p>
           <p class="foot">Energy per cell = Σ<sub>channels</sub> (Δ / σ<sub>ch</sub>)², σ = [13.46 K, 7.55 mm/d, 2.90, 2.43 m/s,
-            619 Pa, 20.49 kg/m²]. “Near” = within 2 cells of the box; “far” = everything else (mean per cell, log scale).
-            Reach = furthest cell (Chebyshev distance in 1° grid cells from the box) with energy &gt; 10⁻³; it is also drawn as a dotted ring on the Δ map.</p>
+            619 Pa, 20.49 kg/m²]. Near is within 2 cells of the box; far is everything else (mean per cell, log scale).
+            Reach is the furthest cell (Chebyshev distance in 1° grid cells from the box) with energy above 10⁻³, also drawn as a dotted ring on the Δ map.</p>
         </section>
         <section class="card impact">
-          <h2>Heat &amp; Kharif water-stress co-pilot <span class="h2sub">— Prime vs Multiverse, land cells only</span></h2>
+          <h2>Heat and kharif water-stress co-pilot</h2>
+          <p class="h2sub">Prime against Multiverse, land cells only</p>
           <div id="impactBody"></div>
           <p class="foot" id="impactFoot"></p>
         </section>
       </div>
     </main>
   </div>
-  <noscript>This dashboard needs JavaScript.</noscript>
+  <noscript><p class="noscript">This dashboard needs JavaScript: every map comes from a live call to the model server.</p></noscript>
   <script src="colormaps.js"></script>
   <script src="app.js"></script>
 </body>

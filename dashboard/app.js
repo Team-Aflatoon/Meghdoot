@@ -3,7 +3,26 @@
 // nothing is pre-rendered. If the API is unreachable the dashboard shows a red "server offline" state.
 'use strict';
 
-const APP_TITLE = 'Meghdoot — Multiverse of Monsoon Climate Twin';
+const APP_TITLE = 'Meghdoot';
+// Canvas chrome reads the same tokens as the CSS (tokens.css), so charts and page share one palette.
+const TH = {};
+function cssv(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function loadTheme() {
+  const probe = document.createElement('span'); document.body.appendChild(probe);
+  for (const [k, v] of Object.entries({ paper3: '--color-paper-3', ink: '--color-ink', ink2: '--color-ink-2', muted: '--color-muted',
+    rule: '--color-rule', accent: '--color-accent', cool: '--color-cool', ok: '--color-ok', bad: '--color-bad' })) {
+    probe.style.color = `var(${v})`; TH[k] = getComputedStyle(probe).color;
+  }
+  probe.remove();
+  TH.font = cssv('--font-body') || 'system-ui, sans-serif';
+}
+function alpha(c, a) {           // works for rgb(), rgba(), oklch() and color() strings
+  if (/^#[0-9a-f]{6}$/i.test(c)) { const n = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)); return `rgba(${n.join(',')},${a})`; }
+  if (/^rgba?\(/.test(c)) { const n = c.match(/[\d.]+/g).slice(0, 3); return `rgba(${n.join(',')},${a})`; }
+  return c.replace(/\s*(\/\s*[\d.]+\s*)?\)$/, ` / ${a})`);
+}
+const ICON_PLAY = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>';
+const ICON_PAUSE = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5h3v11H3zM8 1.5h3v11H8z" fill="currentColor"/></svg>';
 const DEFAULT_BASE = 'http://localhost:8000';
 
 // ---------------------------------------------------------------- grid & channels
@@ -18,12 +37,12 @@ const HEAT_K = 273.15 + 34;                 // daily-mean t2m >= 34 C
 const DRY_MM = 2.5;                         // IMD rainy-day threshold
 
 const CH = [
-  { key: 't2m', name: 't2m — 2 m temperature', unit: '°C', dUnit: '°C', off: -273.15, scale: 1, addUnit: 'K', addFactor: 1, cmap: 'temp', signed: false, nonneg: false },
-  { key: 'tp', name: 'tp — rain', unit: 'mm/day', dUnit: 'mm/day', off: 0, scale: 1, addUnit: 'mm/day', addFactor: 1, cmap: 'rain', signed: false, nonneg: true },
-  { key: 'u10', name: 'u10 — wind, east-west', unit: 'm/s', dUnit: 'm/s', off: 0, scale: 1, addUnit: 'm/s', addFactor: 1, cmap: 'wind', signed: true, nonneg: false },
-  { key: 'v10', name: 'v10 — wind, north-south', unit: 'm/s', dUnit: 'm/s', off: 0, scale: 1, addUnit: 'm/s', addFactor: 1, cmap: 'wind', signed: true, nonneg: false },
-  { key: 'msl', name: 'msl — sea-level pressure', unit: 'hPa', dUnit: 'hPa', off: 0, scale: 0.01, addUnit: 'hPa', addFactor: 100, cmap: 'msl', signed: false, nonneg: false },
-  { key: 'tcwv', name: 'tcwv — column water vapour', unit: 'kg/m²', dUnit: 'kg/m²', off: 0, scale: 1, addUnit: 'kg/m²', addFactor: 1, cmap: 'moist', signed: false, nonneg: true },
+  { key: 't2m', name: 't2m, 2 m temperature', unit: '°C', dUnit: '°C', off: -273.15, scale: 1, addUnit: 'K', addFactor: 1, cmap: 'temp', signed: false, nonneg: false },
+  { key: 'tp', name: 'tp, rain', unit: 'mm/day', dUnit: 'mm/day', off: 0, scale: 1, addUnit: 'mm/day', addFactor: 1, cmap: 'rain', signed: false, nonneg: true },
+  { key: 'u10', name: 'u10, wind, east-west', unit: 'm/s', dUnit: 'm/s', off: 0, scale: 1, addUnit: 'm/s', addFactor: 1, cmap: 'wind', signed: true, nonneg: false },
+  { key: 'v10', name: 'v10, wind, north-south', unit: 'm/s', dUnit: 'm/s', off: 0, scale: 1, addUnit: 'm/s', addFactor: 1, cmap: 'wind', signed: true, nonneg: false },
+  { key: 'msl', name: 'msl, sea-level pressure', unit: 'hPa', dUnit: 'hPa', off: 0, scale: 0.01, addUnit: 'hPa', addFactor: 100, cmap: 'msl', signed: false, nonneg: false },
+  { key: 'tcwv', name: 'tcwv, column water vapour', unit: 'kg/m²', dUnit: 'kg/m²', off: 0, scale: 1, addUnit: 'kg/m²', addFactor: 1, cmap: 'moist', signed: false, nonneg: true },
 ];
 // Derived "channels" (index NCH + k in the picker): calibrated probabilities from POST /risk (dashboard only).
 const RISK_MM = 10;
@@ -36,8 +55,8 @@ const RISK = [
 const isRisk = (c) => c >= NCH;
 const chInfo = (c) => (isRisk(c) ? RISK[c - NCH] : CH[c]);
 const RISK_METHOD = 'Share of the 5 ensemble members above the threshold, blended with the historical monthly frequency for that cell ' +
-  'using per-day weights fitted out of sample. Brier skill vs “normal odds” on held-out 2021 is positive at every lead — ' +
-  'heavy rain +0.33 / +0.03 / +0.004 and heat +0.58 / +0.20 / +0.09 at days 1 / 4 / 8 — so the maps fade to normal odds when the model can’t tell.';
+  'using per-day weights fitted out of sample. Brier skill vs “normal odds” on held-out 2021 is positive at every lead, ' +
+  'heavy rain +0.33 / +0.03 / +0.004 and heat +0.58 / +0.20 / +0.09 at days 1 / 4 / 8, so the maps fade to normal odds when the model can’t tell.';
 const disp = (c, v) => (v + CH[c].off) * CH[c].scale;     // physical -> display units
 const dispD = (c, d) => d * CH[c].scale;                   // physical delta -> display delta
 
@@ -88,7 +107,7 @@ const S = {
 };
 
 const $ = (id) => document.getElementById(id);
-const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '—');
+const fmt = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : 'n/a');
 const sgn = (v, d = 0) => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(v).toFixed(d);
 const at = (arr, day0, c, cell) => arr[(day0 * NCH + c) * NCELL + cell];   // day0 = 0-based
 
@@ -182,7 +201,7 @@ async function simulate(pert) {
     r = await fetch(S.base + '/simulate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   } catch (e) {
     setOnline(false, '');
-    throw new Error('server offline — could not reach ' + S.base + '/simulate');
+    throw new Error('server offline, could not reach ' + S.base + '/simulate');
   }
   let j;
   try { j = await r.json(); } catch (e) { throw new Error('HTTP ' + r.status + ' (non-JSON response)'); }
@@ -286,7 +305,7 @@ async function runMultiverse() {
     S.multiSteps = S.steps;
     S.riskReq.multi = { src: S.multi, scen: S.scen, steps: S.steps, pert };
     S.multiBox = { ...S.shock.box };
-    S.multiDesc = (S.shock.comps.length ? S.shock.comps.map(compText).join(', ') : 'zero shock (all-zero perturbation)') + ' · ' + boxText(S.shock.box);
+    S.multiDesc = (S.shock.comps.length ? S.shock.comps.map(compText).join(', ') : 'zero shock (all-zero perturbation)') + ', ' + boxText(S.shock.box);
     let mx = 0; for (let i = 0; i < S.multi.length; i++) { const d = Math.abs(S.multi[i] - S.prime[i]); if (d > mx) mx = d; }
     S.multiMaxAll = mx;
     computeSpread();
@@ -379,7 +398,7 @@ function riskField(kind, c, day0) {
     for (let i = 0; i < NCELL; i++) f[i] = (heat ? S.scen.obs[o + i] >= HEAT_K : S.scen.obs[o + i] > RISK_MM) ? 100 : 0;
     return { f };
   }
-  if (S.riskOff) return { msg: `Risk maps unavailable — this server’s /risk returned ${S.riskOff}` };
+  if (S.riskOff) return { msg: `Risk maps unavailable, this server’s /risk returned ${S.riskOff}` };
   const one = (k) => {
     const src = k === 'prime' ? S.prime : S.multi;
     if (!src) return { msg: S.busy ? S.busyMsg : k === 'prime' ? 'Waiting for the live Prime run…' : 'Pick a preset or drag a box, then press “Run multiverse”' };
@@ -440,7 +459,7 @@ function drawPanel(p) {
   p.geo = { left: padL, top: padT, cs, w: cs * NC, h: cs * NR };
   const g = p.geo;
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = '#0b0f14'; ctx.fillRect(g.left, g.top, g.w, g.h);
+  ctx.fillStyle = TH.paper3; ctx.fillRect(g.left, g.top, g.w, g.h);
 
   const c = S.ch, day0 = S.day - 1;
   let res, overlay = '', ovClass = '';
@@ -472,7 +491,7 @@ function drawPanel(p) {
   p.field = res.f || null;
 
   // graticule
-  ctx.font = '10px "Segoe UI", sans-serif'; ctx.fillStyle = '#8d99aa'; ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+  ctx.font = `10px ${TH.font}`; ctx.fillStyle = TH.muted; ctx.strokeStyle = alpha(TH.ink, 0.10); ctx.lineWidth = 1;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (const lat of [10, 20, 30]) {
     const y = g.top + (LAT_N_EDGE - lat) * cs;
@@ -501,8 +520,8 @@ function drawPanel(p) {
   // regions
   const rectDeg = (b) => [g.left + (b.w - LON_W_EDGE) * cs, g.top + (LAT_N_EDGE - b.n) * cs, (b.e - b.w) * cs, (b.n - b.s) * cs];
   if (S.regions) {
-    ctx.setLineDash([2, 3]); ctx.strokeStyle = 'rgba(160,255,190,0.9)'; ctx.lineWidth = 1.2;
-    ctx.fillStyle = 'rgba(160,255,190,0.95)'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = '10px "Segoe UI", sans-serif';
+    ctx.setLineDash([2, 3]); ctx.strokeStyle = TH.ok; ctx.lineWidth = 1.2;
+    ctx.fillStyle = TH.ok; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `10px ${TH.font}`;
     for (const R of REGIONS) { const [x, y, w, h] = rectDeg(R); ctx.strokeRect(x, y, w, h); ctx.fillText(R.name, x + 2, y + 2); }
     ctx.setLineDash([]);
   }
@@ -525,7 +544,7 @@ function drawPanel(p) {
     const [x, y, w, h] = rectDeg(box);
     ctx.setLineDash([5, 3]); ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeRect(x, y, w, h);
-    ctx.strokeStyle = '#f5b83d'; ctx.lineWidth = 1.4; ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = TH.accent; ctx.lineWidth = 1.4; ctx.strokeRect(x, y, w, h);
     ctx.setLineDash([]);
   }
 
@@ -541,23 +560,23 @@ function drawPanel(p) {
 // city dots + short labels; the selected city is drawn larger, with its full name and its grid cell outlined
 const cityXY = (g, ct) => [g.left + (ct.lon - LON_W_EDGE) * g.cs, g.top + (LAT_N_EDGE - ct.lat) * g.cs];
 function drawCities(ctx, g) {
-  ctx.font = '9.5px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `9.5px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   CITIES.forEach((ct, k) => {
     const sel = k === S.city;
     if (!sel && !S.showCities) return;
     const [x, y] = cityXY(g, ct);
     if (sel) {
       ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
-      ctx.strokeStyle = '#4fb3ff'; ctx.lineWidth = 1.5; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
+      ctx.strokeStyle = TH.cool; ctx.lineWidth = 1.5; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
     }
     ctx.beginPath(); ctx.arc(x, y, sel ? 3.6 : 2.3, 0, 7);
-    ctx.fillStyle = sel ? '#4fb3ff' : '#ffffff'; ctx.fill();
+    ctx.fillStyle = sel ? TH.cool : '#ffffff'; ctx.fill();
     ctx.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.85)'; ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
     const t = sel ? ct.name : ct.short, tx = x + ct.dx * (sel ? 6 : 4.5);
     ctx.textAlign = ct.dx > 0 ? 'left' : 'right';
-    ctx.font = (sel ? '600 11px' : '9.5px') + ' "Segoe UI", sans-serif';
+    ctx.font = (sel ? '600 11px' : '9.5px') + ' ' + TH.font;
     ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2.6; ctx.strokeText(t, tx, y);
-    ctx.fillStyle = sel ? '#bfe4ff' : 'rgba(255,255,255,0.92)'; ctx.fillText(t, tx, y);
+    ctx.fillStyle = sel ? TH.ink : 'rgba(255,255,255,0.92)'; ctx.fillText(t, tx, y);
   });
 }
 
@@ -601,7 +620,7 @@ function drawLegend(p) {
   const unit = isD ? chInfo(c).dUnit : chInfo(c).unit;
   const span = hi - lo;
   const dec = span === 0 ? 1 : span < 0.1 ? 3 : span < 1 ? 2 : span < 20 ? 1 : 0;
-  ctx.fillStyle = '#c3ccd8'; ctx.font = '10.5px "Segoe UI", sans-serif'; ctx.textBaseline = 'top';
+  ctx.fillStyle = TH.ink2; ctx.font = `10.5px ${TH.font}`; ctx.textBaseline = 'top';
   const lbl = (v) => (isD && v > 0 ? '+' : '') + v.toFixed(dec);
   ctx.textAlign = 'left'; ctx.fillText(lbl(lo), x0, y0 + h + 3);
   ctx.textAlign = 'center'; ctx.fillText(isD ? `0  (${unit})` : `${lbl((lo + hi) / 2)}  ${unit}`, x0 + w / 2, y0 + h + 3);
@@ -638,10 +657,10 @@ function drawSpread() {
   const ctx = sizeCanvas(cv, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);
   const L = 46, R = 40, T = 10, B = 26, w = cssW - L - R, h = cssH - T - B;
-  ctx.font = '11px "Segoe UI", sans-serif';
+  ctx.font = `11px ${TH.font}`;
   const sp = S.spread;
   if (!sp) {
-    ctx.fillStyle = '#8d99aa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = TH.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(S.online === false ? 'Server offline' : 'Run a multiverse to see how the shock spreads', cssW / 2, cssH / 2);
     $('reachRow').innerHTML = '';
     return;
@@ -658,7 +677,7 @@ function drawSpread() {
   const Yr = (r) => T + h - (r / maxReach) * h;
 
   // axes & grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.fillStyle = '#8d99aa'; ctx.lineWidth = 1;
+  ctx.strokeStyle = alpha(TH.ink, 0.08); ctx.fillStyle = TH.muted; ctx.lineWidth = 1;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   const stepDec = Math.max(1, Math.ceil((top - bot) / 5));
   for (let e = bot; e <= top; e += stepDec) {
@@ -667,35 +686,35 @@ function drawSpread() {
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   for (let d = 0; d < N; d++) if (N <= 15 || d % 2 === 0) ctx.fillText('d' + (d + 1), X(d), T + h + 4);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#a58bff';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = TH.muted;
   for (let r = 0; r <= maxReach; r += Math.max(1, Math.ceil(maxReach / 4))) ctx.fillText(r + ' c', L + w + 4, Yr(r));
 
   // reach bars
   const bw = Math.max(3, Math.min(14, w / N * 0.35));
-  ctx.fillStyle = 'rgba(165,139,255,0.35)';
+  ctx.fillStyle = alpha(TH.muted, 0.35);
   sp.reach.forEach((r, d) => { if (r != null) ctx.fillRect(X(d) - bw / 2, Yr(r), bw, T + h - Yr(r)); });
 
   // current day
   const cd = S.day - 1;
-  if (cd < N) { ctx.strokeStyle = 'rgba(245,184,61,0.6)'; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(cd), T); ctx.lineTo(X(cd), T + h); ctx.stroke(); ctx.setLineDash([]); }
+  if (cd < N) { ctx.strokeStyle = alpha(TH.accent, 0.6); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(cd), T); ctx.lineTo(X(cd), T + h); ctx.stroke(); ctx.setLineDash([]); }
 
   const line = (arr, col) => {
     ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
     arr.forEach((v, d) => (d ? ctx.lineTo(X(d), Yl(v)) : ctx.moveTo(X(d), Yl(v)))); ctx.stroke();
     ctx.fillStyle = col; arr.forEach((v, d) => { ctx.beginPath(); ctx.arc(X(d), Yl(v), 2.6, 0, 7); ctx.fill(); });
   };
-  line(sp.near, '#f5b83d'); line(sp.far, '#4fb3ff');
+  line(sp.near, TH.accent); line(sp.far, TH.cool);
 
   // legend
-  ctx.font = '11px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  const lg = [['#f5b83d', 'near box (≤2 cells)'], ['#4fb3ff', 'far from box'], ['rgba(165,139,255,0.8)', 'reach (cells, right axis)']];
+  ctx.font = `11px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const lg = [[TH.accent, 'near box (≤2 cells)'], [TH.cool, 'far from box'], [alpha(TH.muted, 0.8), 'reach (cells, right axis)']];
   let lx = L + 6;
-  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, T + 6, 10, 4); ctx.fillStyle = '#c3ccd8'; ctx.fillText(t, lx + 14, T + 8); lx += ctx.measureText(t).width + 30; }
+  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, T + 6, 10, 4); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 14, T + 8); lx += ctx.measureText(t).width + 30; }
 
   const zero = all.length === 0;
   $('reachRow').innerHTML = zero
     ? '<b>Δ = 0 everywhere, every day:</b> Multiverse ≡ Prime (zero shock reproduces Prime exactly).'
-    : 'Reach per day (cells): ' + sp.reach.map((r, d) => `d${d + 1} <b>${r == null ? '–' : r}</b>`).join(' · ');
+    : 'Reach per day (cells): ' + sp.reach.map((r, d) => `d${d + 1} <b>${r == null ? 'n/a' : r}</b>`).join(', ');
 }
 
 // ---------------------------------------------------------------- impact co-pilot
@@ -730,10 +749,10 @@ function riskImpact(kind, N) {
 function waterRisk(P, M) {
   const pct = P.rain > 0 ? (M.rain - P.rain) / P.rain * 100 : 0;
   const dDry = M.dry - P.dry;
-  if (P.rain < 5 && M.rain < 5) return { level: 'LOW', pct, note: 'baseline already dry (<5 mm) — little rain at stake' };
+  if (P.rain < 5 && M.rain < 5) return { level: 'LOW', pct, note: 'baseline already dry (<5 mm), little rain at stake' };
   if (pct <= -25 || dDry >= 3) return { level: 'HIGH', pct };
   if (pct <= -10 || dDry >= 1.5) return { level: 'MODERATE', pct };
-  if (pct >= 30 && M.rain >= 50) return { level: 'WET', pct, note: 'excess rain — waterlogging / flash-flood watch' };
+  if (pct >= 30 && M.rain >= 50) return { level: 'WET', pct, note: 'excess rain, waterlogging / flash-flood watch' };
   return { level: 'LOW', pct };
 }
 function heatRisk(P, M) {
@@ -757,7 +776,7 @@ function renderImpact() {
       ? `<b>Chance of heavy-rain day</b> hidden: this server’s /risk endpoint returned ${S.riskOff}.`
       : `<b>Chance of heavy-rain day</b> = for each land cell the highest daily calibrated P(rain &gt; ${RISK_MM} mm/day) over the ${N || 'N'} days, ` +
         `averaged over the region (from POST /risk); the advisory mentions it only when it moves by ≥ 5 percentage points. ${RISK_METHOD}`);
-  if (S.online === false && !S.prime) { body.innerHTML = '<p class="muted">Server offline — no live rollout to analyse.</p>'; return; }
+  if (S.online === false && !S.prime) { body.innerHTML = '<p class="muted">Server offline, no live rollout to analyse.</p>'; return; }
   if (!S.prime) { body.innerHTML = '<p class="muted">Waiting for the live Prime run…</p>'; return; }
   const P = impactStats(S.prime, N);
   const M = S.multi && S.multiSteps === N ? impactStats(S.multi, N) : null;
@@ -787,11 +806,11 @@ function renderImpact() {
     html += `<tr><td>${R.name} <span class="muted">(${p.n})</span></td>` +
       `<td class="num">${cmp(p.heat, m && m.heat, 1)}</td>` +
       `<td class="num">${cmp(p.rain, m && m.rain, 0)}</td>` +
-      `<td class="num">${m ? `<b class="${wr.pct > 0.5 ? 'up' : wr.pct < -0.5 ? 'down' : ''}">${sgn(wr.pct, 0)} %</b>` : '—'}</td>` +
+      `<td class="num">${m ? `<b class="${wr.pct > 0.5 ? 'up' : wr.pct < -0.5 ? 'down' : ''}">${sgn(wr.pct, 0)} %</b>` : 'n/a'}</td>` +
       `<td class="num">${cmp(p.dry, m && m.dry, 1)}</td>` +
       (showR ? `<td class="num">${cmpR(k)}</td>` : '') +
       `<td>${m ? `<span class="risk ${wr.level}">${wr.level}</span>` : '<span class="risk NA">run shock</span>'}</td>` +
-      `<td>${m ? `<span class="risk ${hr}">${hr}</span>` : '<span class="risk NA">—</span>'}</td></tr>`;
+      `<td>${m ? `<span class="risk ${hr}">${hr}</span>` : '<span class="risk NA">n/a</span>'}</td></tr>`;
     if (m) {
       const dryBase = p.rain < 5 && m.rain < 5;
       const rainTxt = dryBase
@@ -857,15 +876,15 @@ function cityData() {
 function renderCity() {
   const sum = $('citySum'), cv = $('cityCv');
   $('cityFoot').innerHTML = (S.city === CITY_ALL
-    ? 'All India = mean over all land cells (land-sea mask ≥ 0.5) of the 32 × 36 grid (6–38°N, 65–101°E), daily mean — this includes the Himalaya / Tibet and neighbouring countries, which pulls the mean temperature down. '
-    : `Value of the 1° grid cell containing ${cityName()} (≈110 km box, centre ${(LAT0 + CITIES[S.city].r).toFixed(1)}°N ${(LON0 + CITIES[S.city].col).toFixed(1)}°E), daily mean — not a station reading. `) +
+    ? 'All India = mean over all land cells (land-sea mask ≥ 0.5) of the 32 × 36 grid (6–38°N, 65–101°E), daily mean, this includes the Himalaya / Tibet and neighbouring countries, which pulls the mean temperature down. '
+    : `Value of the 1° grid cell containing ${cityName()} (≈110 km box, centre ${(LAT0 + CITIES[S.city].r).toFixed(1)}°N ${(LON0 + CITIES[S.city].col).toFixed(1)}°E), daily mean, not a station reading. `) +
     'Temperature = daily-mean 2 m temperature; “peak” = warmest daily mean, not the daily maximum. Negative model rain is treated as 0. ' +
     `Observed = what really happened (days 1–${NOBS}). ` +
     (S.riskOff ? `Heavy-rain chance hidden: this server’s /risk returned ${S.riskOff}.`
       : `Chance of a heavy-rain day = highest daily calibrated P(rain &gt; ${RISK_MM} mm/day) over the N days (POST /risk)${S.city === CITY_ALL ? ', averaged over land cells' : ''}.`);
   const D = cityData();
   drawCityChart(cv, D);
-  if (!D) { sum.innerHTML = `<span class="muted">${S.online === false ? 'Server offline — no live rollout.' : S.busy ? S.busyMsg : 'Waiting for the live Prime run…'}</span>`; return; }
+  if (!D) { sum.innerHTML = `<span class="muted">${S.online === false ? 'Server offline, no live rollout.' : S.busy ? S.busyMsg : 'Waiting for the live Prime run…'}</span>`; return; }
   const total = (a) => a.reduce((x, y) => x + y, 0), peak = (a) => Math.max(...a);
   const pr = total(D.P.rain), pt = peak(D.P.t);
   const parts = [`<b>${cityName()}</b>`];
@@ -882,15 +901,15 @@ function renderCity() {
     if (rp != null) parts.push(`chance of a heavy-rain day <b>${fmt(rp, 0)}%</b>`);
   }
   if (D.O) parts.push(`<span class="muted">observed ${D.nObs}-day rain ${fmt(total(D.O.rain), 0)} mm</span>`);
-  sum.innerHTML = parts.join(' · ');
+  sum.innerHTML = parts.join('; ');
 }
 function drawCityChart(cv, D) {
   const cssW = cv.clientWidth, cssH = 176;
   const ctx = sizeCanvas(cv, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.font = '11px "Segoe UI", sans-serif';
+  ctx.font = `11px ${TH.font}`;
   if (!D) {
-    ctx.fillStyle = '#8d99aa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = TH.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(S.online === false ? 'Server offline' : 'Waiting for the live Prime run…', cssW / 2, cssH / 2);
     return;
   }
@@ -898,7 +917,7 @@ function drawCityChart(cv, D) {
   const w = cssW - L - R, hh = (cssH - T - B - GAP) / 2;
   const yT0 = T, yR0 = T + hh + GAP;
   const bw = w / N, X = (d) => L + (d + 0.5) * bw;
-  const PC = '#4fb3ff', MC = '#f5b83d', OC = '#9aa4b2';
+  const PC = TH.cool, MC = TH.accent, OC = TH.muted;
   const series = (k) => [D.P[k], D.M && D.M[k], D.O && D.O[k]].filter(Boolean).flatMap((a) => Array.from(a));
   const ts = series('t');
   let tlo = Math.min(...ts), thi = Math.max(...ts);
@@ -908,7 +927,7 @@ function drawCityChart(cv, D) {
   const YT = (v) => yT0 + hh - (v - tlo) / (thi - tlo) * hh;
   const YR = (v) => yR0 + hh - v / rhi * hh;
   // gridlines + axis labels
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.fillStyle = '#8d99aa';
+  ctx.strokeStyle = alpha(TH.ink, 0.08); ctx.lineWidth = 1; ctx.fillStyle = TH.muted;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   const ticks = (lo, hi) => {
     const sp = hi - lo, st = sp > 120 ? 50 : sp > 60 ? 20 : sp > 25 ? 10 : sp > 12 ? 5 : sp > 5 ? 2 : sp > 2.5 ? 1 : 0.5;
@@ -923,8 +942,8 @@ function drawCityChart(cv, D) {
   for (let d = 0; d < N; d++) if (d % every === 0 || d === cd) ctx.fillText('d' + (d + 1), X(d), yR0 + hh + 3);
   // current day (from the day slider)
   if (cd >= 0 && cd < N) {
-    ctx.fillStyle = 'rgba(245,184,61,0.13)'; ctx.fillRect(L + cd * bw, yT0, bw, yR0 + hh - yT0);
-    ctx.strokeStyle = 'rgba(245,184,61,0.55)'; ctx.setLineDash([3, 3]);
+    ctx.fillStyle = alpha(TH.accent, 0.13); ctx.fillRect(L + cd * bw, yT0, bw, yR0 + hh - yT0);
+    ctx.strokeStyle = alpha(TH.accent, 0.55); ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(X(cd), yT0); ctx.lineTo(X(cd), yR0 + hh); ctx.stroke(); ctx.setLineDash([]);
   }
   // rain: Prime | Multiverse bars side by side; observed as a dashed line
@@ -940,12 +959,12 @@ function drawCityChart(cv, D) {
   line(D.P.t, PC, YT, []);
   if (D.M) line(D.M.t, MC, YT, []);
   // legend + current-day values
-  ctx.font = '11px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = `11px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const lg = [[PC, 'Prime']]; if (D.M) lg.push([MC, 'Multiverse']); if (D.O) lg.push([OC, `Observed (d1–${D.nObs})`]);
   let lx = L + 2;
-  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, 7, 12, 3); ctx.fillStyle = '#c3ccd8'; ctx.fillText(t, lx + 16, 8.5); lx += ctx.measureText(t).width + 32; }
+  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, 7, 12, 3); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 16, 8.5); lx += ctx.measureText(t).width + 32; }
   if (cd >= 0 && cd < N) {
-    ctx.textAlign = 'right'; ctx.fillStyle = '#8d99aa';
+    ctx.textAlign = 'right'; ctx.fillStyle = TH.muted;
     ctx.fillText(`day ${S.day}: ${fmt(D.P.t[cd], 1)} °C, ${fmt(D.P.rain[cd], 1)} mm` +
       (D.M ? ` → ${fmt(D.M.t[cd], 1)} °C, ${fmt(D.M.rain[cd], 1)} mm` : ''), L + w, 8.5);
   }
@@ -967,17 +986,17 @@ function cityNear(p, ev) {          // index of the city marker within 8 px of t
 function renderStatus() {
   const dot = $('apiDot');
   dot.className = 'dot' + (S.online === true ? ' ok' : S.online === false ? ' bad' : '');
-  $('apiText').textContent = S.online === true ? 'API ready' : S.online === false ? 'SERVER OFFLINE' : 'checking…';
-  $('apiText').style.color = S.online === false ? 'var(--bad)' : '';
-  $('modelName').textContent = S.modelName || '—';
-  $('infMs').textContent = S.lastMs != null ? fmt(S.lastMs, 0) + ' ms' : '—';
+  $('apiText').textContent = S.online === true ? 'ready' : S.online === false ? 'offline' : 'checking…';
+  $('apiText').style.color = S.online === false ? 'var(--color-bad)' : '';
+  $('modelName').textContent = S.modelName || 'n/a';
+  $('infMs').textContent = S.lastMs != null ? fmt(S.lastMs, 0) + ' ms' : 'n/a';
   $('stepsTxt').textContent = S.primeSteps || S.steps;
   $('offlineBanner').hidden = S.online !== false;
   $('offlineUrl').textContent = S.base;
 }
 function updateButtons() {
   $('runBtn').disabled = S.busy || !S.scen || S.online === false;
-  $('runBtn').textContent = S.busy ? (S.busyMsg || 'Running…') : 'Run multiverse ▶';
+  $('runBtn').textContent = S.busy ? (S.busyMsg || 'Running…') : 'Run multiverse';
 }
 function setRunMsg(t, cls) { const el = $('runMsg'); el.textContent = t; el.className = 'runmsg ' + (cls || ''); }
 
@@ -1023,15 +1042,15 @@ function renderAll() {
   $('dayTxt').textContent = S.day;
   $('dateTxt').textContent = `Forecast day ${S.day} of ${N} → valid ${dateOf(S.scen.last_input_day, S.day)} (start state ends ${dateOf(S.scen.last_input_day, 0)})`;
   const ch = chInfo(S.ch), rk = isRisk(S.ch);
-  $('subPrime').textContent = rk ? `calibrated chance · ${ch.name} (%)` : `unshocked rollout · ${ch.key} (${ch.unit})`;
-  $('subObs').textContent = rk ? `what really happened · ${ch.obsName} (yes = 100 %)` : `what really happened · ${ch.key}`;
+  $('subPrime').textContent = rk ? `calibrated chance, ${ch.name} (%)` : `unshocked rollout, ${ch.key} (${ch.unit})`;
+  $('subObs').textContent = rk ? `what really happened, ${ch.obsName} (yes = 100 %)` : `what really happened, ${ch.key}`;
   renderRiskNote();
   $('subMulti').textContent = S.multi ? S.multiDesc : 'shocked rollout';
   $('subMulti').title = S.multi ? S.multiDesc : '';
   if (S.multi && S.prime) {
     const m = deltaRange(S.ch).max;
-    $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly — Multiverse ≡ Prime'
-      : rk && !(riskOk('prime') && riskOk('multi')) ? `${ch.key} · percentage points`
+    $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly, Multiverse ≡ Prime'
+      : rk && !(riskOk('prime') && riskOk('multi')) ? `${ch.key}, percentage points`
       : `max |Δ| ${ch.key} (all days) = ${rk ? m.toFixed(1) : m.toPrecision(3)} ${ch.dUnit}`;
   } else $('subDelta').textContent = 'diverging, symmetric, white = 0';
   renderReadout();
@@ -1041,7 +1060,7 @@ function renderReadout() {
   const el = $('readout');
   if (!S.hover) { el.innerHTML = 'Hover a map to read values. Drag on a map to paint a shock box (snaps to 1° cells).'; return; }
   const { r, col } = S.hover, i = r * NC + col, ch = chInfo(S.ch), rk = isRisk(S.ch);
-  const parts = [`<b>${(LAT0 + r).toFixed(1)}°N ${(LON0 + col).toFixed(1)}°E</b> ${S.land[i] ? 'land' : 'sea'} · ${ch.key}`];
+  const parts = [`<b>${(LAT0 + r).toFixed(1)}°N ${(LON0 + col).toFixed(1)}°E</b> ${S.land[i] ? 'land' : 'sea'}, ${ch.key}`];
   for (const p of panels) {
     if (p.el.hidden || !p.field) continue;
     const name = { obs: 'Observed', prime: 'Prime', multi: 'Multiverse', delta: 'Δ' }[p.kind];
@@ -1052,7 +1071,7 @@ function renderReadout() {
     }
     parts.push(`${name} <b>${p.kind === 'delta' && v > 0 ? '+' : ''}${v.toFixed(Math.abs(v) < 1 && v !== 0 ? 3 : 2)}</b>`);
   }
-  el.innerHTML = parts.join(' &nbsp;·&nbsp; ') + (rk ? '' : ` ${ch.unit}`);
+  el.innerHTML = parts.join('; ') + (rk ? '' : ` ${ch.unit}`);
 }
 
 function renderRiskNote() {
@@ -1062,7 +1081,7 @@ function renderRiskNote() {
   if (el.hidden) return;
   const e = riskOk('prime');
   el.className = 'risknote';
-  el.innerHTML = `<b>${chInfo(S.ch).name}</b> — calibrated chance per cell and day; fades to normal odds when the model can’t tell. ` +
+  el.innerHTML = `<b>${chInfo(S.ch).name}</b>, calibrated chance per cell and day; fades to normal odds when the model can’t tell. ` +
     RISK_METHOD + (e ? ` <span class="muted">(${e.members} members, ${fmt(e.ms, 0)} ms server)</span>` : '');
 }
 
@@ -1124,10 +1143,10 @@ function setDay(d) {
   renderAll();
 }
 function togglePlay() {
-  if (S.timer) { clearInterval(S.timer); S.timer = null; $('playBtn').textContent = '▶'; return; }
+  if (S.timer) { clearInterval(S.timer); S.timer = null; $('playBtn').innerHTML = ICON_PLAY; return; }
   const N = S.primeSteps || S.steps;
   if (S.day >= N) setDay(1);
-  $('playBtn').textContent = '❚❚';
+  $('playBtn').innerHTML = ICON_PAUSE;
   S.timer = setInterval(() => {
     const NN = S.primeSteps || S.steps;
     if (S.day >= NN) { togglePlay(); return; }
@@ -1144,7 +1163,7 @@ async function loadScenario(key) {
     init: flatten(j.init_states, [3, NCH, NR, NC]),
     obs: flatten(j.observed, [NOBS, NCH, NR, NC]),
   };
-  $('scenSub').textContent = `${j.label} · start state ends ${dateOf(j.last_input_day, 0)}`;
+  $('scenSub').textContent = `${j.label}, start state ends ${dateOf(j.last_input_day, 0)}`;
   invalidateRuns();
   setDay(1);
   renderSidebar();
@@ -1187,6 +1206,7 @@ async function init() {
   $('cityTog').checked = S.showCities;
   $('cityTog').onchange = () => { S.showCities = $('cityTog').checked; renderAll(); };
   $('daySl').oninput = () => setDay(+$('daySl').value);
+  loadTheme(); $('playBtn').innerHTML = ICON_PLAY;
   $('playBtn').onclick = togglePlay;
   $('runBtn').onclick = runMultiverse;
   $('addComp').onclick = () => {
@@ -1221,7 +1241,7 @@ async function init() {
     S.coast = coastline(S.mask);
     idx.forEach((s) => $('scenSel').add(new Option(s.label, s.key)));
   } catch (e) {
-    $('scenSub').textContent = 'Could not load scenarios/ — serve this folder with: python -m http.server 5173';
+    $('scenSub').textContent = 'Could not load scenarios/, serve this folder with: python -m http.server 5173';
     setRunMsg('Failed to load scenario files: ' + e.message, 'err');
     return;
   }
