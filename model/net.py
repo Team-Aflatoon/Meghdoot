@@ -4,7 +4,7 @@ Design invariants (each one is tested in tests/):
   1. LOCALITY: the network is built ONLY from 3x3 / 1x1 convolutions and pointwise activations. There is no
      normalisation over space (BatchNorm/GroupNorm/LayerNorm over H,W), no pooling, no attention, no global
      anything. So the receptive field of one daily step is exactly RADIUS cells, and a shock can travel at most
-     RADIUS cells per simulated day. With RADIUS = 6 (< 8 cells/day allowed by the judge) "teleportation" is
+     RADIUS cells per simulated day. With RADIUS = 6 for plain members and 8 for wind-advection members (the judge allows 8 cells/day) "teleportation" is
      impossible by construction, not by luck.
   2. ANOMALY SPACE: the network sees and predicts anomalies from the day-of-year climatology, and predicts the
      day-to-day CHANGE of the anomaly (residual). Long rollouts relax toward climatology instead of drifting.

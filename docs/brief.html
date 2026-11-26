@@ -50,7 +50,7 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <ul>
 <li><b>Training.</b> Unrolled curriculum on the model's own predictions: 1 → 2 → 4 → 6 days (30 epochs, AdamW, cosine LR, grad-clip 1). Loss is latitude-weighted MSE in std units, ×4 weight where observed rain > 10 mm/day. 7–15 min per member (RTX 4050).</li>
 <li><b>Honest validation.</b> The shipped members are trained on 2005–2019 only and scored on held-out 2020–2021 with the kit's <i>own</i> <code>monsoon_r1.scoring</code> functions, so every number below belongs to the shipped model. We tried retraining on all years and damping toward climatology; neither improved the measured shocks, so neither ships.</li>
-<li><b>Judge replica.</b> Offline Docker (4 CPU, 6 GB, read-only): kit validator passes, 0.3–0.5 s per call, 0.2 GB; repo scan 15/15.</li>
+<li><b>Judge replica.</b> Offline Docker (4 CPU, 6 GB, read-only): kit validator passes, 0.26 s per call, 0.2 GB; repo scan 15/15.</li>
 </ul></div></div>
 
 <h2>2. Results on held-out 2020–2021 (144 windows, every 5th day)</h2>
@@ -113,7 +113,7 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <h2>8. Rules compliance</h2>
 <ul>
 <li>Offline at inference: no weather APIs, no dates in inference code, no data archive in the repo (the 365-day climatology is allowed, and the repo scan confirms it).</li>
-<li>Weights are in the repo (5 × 1.9 MB plus climatology), and training code is included.</li>
+<li>Weights are in the repo (3 × 1.9 MB + 2 × 1.6 MB plus climatology), and training code is included.</li>
 <li>The server imports no UI library. The dashboard is a separate folder and is always driven by live <code>/simulate</code> output.</li>
 <li>All code and weights were created during the hackathon. Libraries: PyTorch, NumPy, FastAPI, xarray (training only).</li>
 </ul>

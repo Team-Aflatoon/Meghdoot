@@ -52,12 +52,12 @@ Damping: out_k = clim_k + λ[k,c]·(out_k − clim_k), λ fitted by least square
 |---|---:|---:|---:|---|---|
 | ens5, no damping | +0.120 | +0.064 | +0.100 | 13.12 ×3 | – |
 | damp all channels | +0.134 | +0.080 (quick test) | +0.090 | 13.12, 11.25, 13.12 | rejected: CSI −1.6 pts, heavy-rain shock stops propagating |
-| **damp all except rain** | **+0.121** | **+0.066** | **+0.100** | 13.12 ×3 | **adopted**: never worse under either reading |
+| damp all except rain | +0.121 | +0.066 | +0.100 | 13.12 ×3 | adopted at first, later **not shipped** (see Final decision: −0.16 causality in the 72-window sweep) |
 
-Shipped λ: refit on 2020+2021 (238 windows) with the selection members (out of sample), rain λ = 1:
+λ fitted on 2020+2021 (not shipped) (238 windows) with the selection members (out of sample), rain λ = 1:
 day 1 all 1.0; day 8 t2m 0.82, u10 0.60, v10 0.56, msl 0.89, tcwv 0.68; day 14 0.25–0.60.
 
-Independent review (fresh agent): no gate or disqualification risk found; fresh clone passes the offline container on
+Independent review (fresh agent; numbers superseded by the Final decision sweep below): no gate or disqualification risk found; fresh clone passes the offline container on
 py3.12/torch 2.15 and py3.10/torch 2.1.2. Seasonal causality over 72 windows (every 10th day of 2020–21, ens5):
 warm_ocean propagates 88%, stable 96% (winter weakest); monsoon_stall propagates 8%; mean 12.97/15, min 11.25.
 Anti-blur on a random draw of 5 windows: 24.5% chance of 8.33 instead of 10 (dry-day rain variance), expected 9.61.
@@ -122,3 +122,5 @@ Why propagation is seasonal (measured; box-mean Δt2m e-folds in about 4–5 day
 The model carries the anomaly **downwind**. In monsoon months it reaches India and passes the propagation check more often.
 In winter it drifts over the open sea and partly off the grid (the box touches the domain's western edge), so by the
 judge's metric it "does not propagate". Demo it in a monsoon scenario (e.g. Konkan, July 2021).
+
+ens5 per-channel skill (dense 144, pooled leads): t2m +0.132, tp −0.015, u10 +0.132, v10 +0.133, msl +0.144, tcwv +0.149 (rain is the weakest channel).
