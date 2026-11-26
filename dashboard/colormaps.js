@@ -15,6 +15,9 @@ const CMAPS = (() => {
     msl: ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'],
     // moisture: dry brown -> moist blue
     moist: ['#3b2a1a', '#7a5c2e', '#b89a5a', '#d9cf8f', '#9fd39a', '#4fb38f', '#22858f', '#1d5a8a', '#1a3570'],
+    // calibrated probabilities (0..100 %), sequential: dark = unlikely, bright = likely
+    prain: ['#10151d', '#16283f', '#1b4266', '#1f6290', '#2b86b5', '#52aed3', '#93d4ea', '#dff4fa'],
+    pheat: ['#15100d', '#33180f', '#5a2211', '#8a2f10', '#bb4512', '#e06a1f', '#f6a043', '#fde2a6'],
     // difference: blue (negative) - white (zero) - red (positive); RdBu reversed
     delta: ['#053061', '#2166ac', '#4393c3', '#92c5de', '#d1e5f0', '#ffffff',
             '#fddbc7', '#f4a582', '#d6604d', '#b2182b', '#67001f'],

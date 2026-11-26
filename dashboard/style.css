@@ -99,6 +99,10 @@ canvas.legend { display: block; width: 100%; height: 34px; margin-top: 2px; }
 .readout { font-size: 12.5px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 8px;
   padding: 5px 10px; font-variant-numeric: tabular-nums; min-height: 28px; }
 .readout b { color: var(--text); }
+.risknote { font-size: 12px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent2);
+  border-radius: 8px; padding: 5px 10px; line-height: 1.4; }
+.risknote b { color: var(--text); }
+.risknote.off { border-left-color: var(--warn); }
 
 .lower { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.35fr); gap: 10px; }
 #spreadCv { width: 100%; height: 210px; display: block; }

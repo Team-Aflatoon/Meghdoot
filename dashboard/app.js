@@ -25,6 +25,19 @@ const CH = [
   { key: 'msl', name: 'msl — sea-level pressure', unit: 'hPa', dUnit: 'hPa', off: 0, scale: 0.01, addUnit: 'hPa', addFactor: 100, cmap: 'msl', signed: false, nonneg: false },
   { key: 'tcwv', name: 'tcwv — column water vapour', unit: 'kg/m²', dUnit: 'kg/m²', off: 0, scale: 1, addUnit: 'kg/m²', addFactor: 1, cmap: 'moist', signed: false, nonneg: true },
 ];
+// Derived "channels" (index NCH + k in the picker): calibrated probabilities from POST /risk (dashboard only).
+const RISK_MM = 10;
+const RISK = [
+  { key: 'P(rain > 10 mm)', name: 'P(heavy rain > 10 mm)', unit: '%', dUnit: 'pp', cmap: 'prain', field: 'rain',
+    obsName: 'rain > 10 mm/day' },
+  { key: 'P(heat ≥ 34 °C)', name: 'P(heat ≥ 34 °C)', unit: '%', dUnit: 'pp', cmap: 'pheat', field: 'heat',
+    obsName: 'daily-mean t2m ≥ 34 °C' },
+];
+const isRisk = (c) => c >= NCH;
+const chInfo = (c) => (isRisk(c) ? RISK[c - NCH] : CH[c]);
+const RISK_METHOD = 'Share of the 5 ensemble members above the threshold, blended with the historical monthly frequency for that cell ' +
+  'using per-day weights fitted out of sample. Brier skill vs “normal odds” on held-out 2021 is positive at every lead — ' +
+  'heavy rain +0.33 / +0.03 / +0.004 and heat +0.58 / +0.20 / +0.09 at days 1 / 4 / 8 — so the maps fade to normal odds when the model can’t tell.';
 const disp = (c, v) => (v + CH[c].off) * CH[c].scale;     // physical -> display units
 const dispD = (c, d) => d * CH[c].scale;                   // physical delta -> display delta
 
@@ -56,6 +69,8 @@ const S = {
   showObs: false, arrows: false, smooth: false, regions: false,
   busy: false, busyMsg: '', timer: null, drag: null, hover: null,
   rangeCache: new Map(), version: 0,
+  // /risk: request captured per run, result cached per run (keyed by the run's rollout array identity)
+  riskReq: { prime: null, multi: null }, riskData: { prime: null, multi: null }, riskOff: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -164,6 +179,47 @@ async function simulate(pert) {
   return flat;
 }
 
+// POST /risk with the exact body the run used. Non-200 => feature unavailable on this server (never faked).
+async function fetchRisk(req) {
+  const body = { init_states: req.scen.init_states, doy_sincos: req.scen.doy_sincos, steps: req.steps,
+    perturbation: req.pert ? nestPert(req.pert) : null };
+  let r;
+  try {
+    r = await fetch(S.base + '/risk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  } catch (e) {
+    throw new Error('could not reach ' + S.base + '/risk');
+  }
+  if (!r.ok) { const e = new Error('HTTP ' + r.status); e.http = r.status; throw e; }
+  let j;
+  try { j = await r.json(); } catch (e) { throw new Error('non-JSON /risk response'); }
+  return { rain: flatten(j.p_rain, [req.steps, NR, NC]), heat: flatten(j.p_heat, [req.steps, NR, NC]),
+    steps: req.steps, members: +j.members, ms: +j.inference_ms };
+}
+// Lazily fetch (once per run) and return the cache entry for 'prime' | 'multi', or null if there is no run.
+function ensureRisk(kind) {
+  const src = kind === 'prime' ? S.prime : S.multi, req = S.riskReq[kind];
+  if (!src || !req || req.src !== src || S.riskOff || S.online === false) return null;
+  const cur = S.riskData[kind];
+  if (cur && cur.src === src) return cur;
+  const e = { src, status: 'loading' }, base = S.base;
+  S.riskData[kind] = e;
+  fetchRisk(req).then((d) => { Object.assign(e, d); e.status = 'ok'; })
+    .catch((err) => {
+      e.status = 'err'; e.msg = err.message;
+      if (err.http && base === S.base) setRiskOff(err.message);
+    })
+    .finally(() => { if (S.riskData[kind] === e || S.riskOff) renderAll(); });
+  return e;
+}
+function setRiskOff(why) {
+  S.riskOff = why;
+  for (const o of $('chSel').options) if (+o.value >= NCH) { o.disabled = !!why; o.hidden = !!why; }
+  if (why && isRisk(S.ch)) {
+    S.ch = 1; $('chSel').value = '1';
+    setRunMsg(`Risk maps unavailable on this server (/risk → ${why}); showing rain instead.`, '');
+  }
+}
+
 // ---------------------------------------------------------------- shock
 function buildPerturbation() {
   const p = new Float32Array(NCH * NCELL);
@@ -196,6 +252,7 @@ async function runPrime() {
   try {
     S.prime = await simulate(null);
     S.primeSteps = S.steps;
+    S.riskReq.prime = { src: S.prime, scen: S.scen, steps: S.steps, pert: null };
     setRunMsg(`Prime: ${S.steps} days in ${fmt(S.lastMs, 0)} ms (server), ${fmt(S.lastRtt, 0)} ms round trip`, 'ok');
   } catch (e) {
     S.prime = null;
@@ -213,6 +270,7 @@ async function runMultiverse() {
   try {
     S.multi = await simulate(pert);
     S.multiSteps = S.steps;
+    S.riskReq.multi = { src: S.multi, scen: S.scen, steps: S.steps, pert };
     S.multiBox = { ...S.shock.box };
     S.multiDesc = (S.shock.comps.length ? S.shock.comps.map(compText).join(', ') : 'zero shock (all-zero perturbation)') + ' · ' + boxText(S.shock.box);
     let mx = 0; for (let i = 0; i < S.multi.length; i++) { const d = Math.abs(S.multi[i] - S.prime[i]); if (d > mx) mx = d; }
@@ -231,6 +289,7 @@ function invalidateRuns() { S.prime = null; S.multi = null; S.multiBox = null; S
 // ---------------------------------------------------------------- colour ranges
 function percentile(sorted, q) { return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))]; }
 function valueRange(c) {
+  if (isRisk(c)) return { lo: 0, hi: 100 };
   const key = `${c}|${S.version}|${S.showObs}`;
   if (S.rangeCache.has(key)) return S.rangeCache.get(key);
   const vals = [];
@@ -249,6 +308,15 @@ function valueRange(c) {
   return res;
 }
 function deltaRange(c) {
+  if (isRisk(c)) {                 // percentage points, all days; small arrays, not cached
+    const P = riskOk('prime'), M = riskOk('multi'), fld = RISK[c - NCH].field;
+    let m = 0;
+    if (P && M) {
+      const a = P[fld], b = M[fld], n = Math.min(a.length, b.length);
+      for (let i = 0; i < n; i++) { const v = Math.abs(b[i] - a[i]); if (v > m) m = v; }
+    }
+    return { max: m * 100 };
+  }
   const key = `d${c}|${S.version}`;
   if (S.rangeCache.has(key)) return S.rangeCache.get(key);
   let m = 0;
@@ -284,7 +352,43 @@ function sizeCanvas(cv, cssW, cssH) {
 }
 
 // field for a panel at the current day; returns Float32Array(NCELL) in display units, or null + message
+function riskOk(kind) {          // cache entry with data for the current run, else null (no fetch)
+  const e = S.riskData[kind], src = kind === 'prime' ? S.prime : S.multi;
+  return e && src && e.src === src && e.status === 'ok' ? e : null;
+}
+function riskField(kind, c, day0) {
+  if (kind === 'obs') {            // observed event as 0 / 100 % (what really happened)
+    if (!S.scen) return { msg: 'Loading…' };
+    if (day0 >= NOBS) return { msg: `No observation beyond day ${NOBS}` };
+    const f = new Float32Array(NCELL), heat = RISK[c - NCH].field === 'heat';
+    const o = (day0 * NCH + (heat ? 0 : 1)) * NCELL;
+    for (let i = 0; i < NCELL; i++) f[i] = (heat ? S.scen.obs[o + i] >= HEAT_K : S.scen.obs[o + i] > RISK_MM) ? 100 : 0;
+    return { f };
+  }
+  if (S.riskOff) return { msg: `Risk maps unavailable — this server’s /risk returned ${S.riskOff}` };
+  const one = (k) => {
+    const src = k === 'prime' ? S.prime : S.multi;
+    if (!src) return { msg: S.busy ? S.busyMsg : k === 'prime' ? 'Waiting for the live Prime run…' : 'Pick a preset or drag a box, then press “Run multiverse”' };
+    const e = ensureRisk(k);
+    if (!e || e.status === 'loading') return { msg: 'Fetching calibrated risk (5-member ensemble)…' };
+    if (e.status === 'err') return { msg: 'Risk request failed: ' + e.msg };
+    if (day0 >= e.steps) return { msg: `No risk map beyond day ${e.steps}` };
+    return { a: e[RISK[c - NCH].field].subarray(day0 * NCELL, (day0 + 1) * NCELL) };
+  };
+  if (kind === 'delta') {
+    if (!S.multi || !S.prime) return { msg: 'Δ appears after a Multiverse run' };
+    const P = one('prime'), M = one('multi');
+    if (P.msg || M.msg) return { msg: P.msg || M.msg };
+    const f = new Float32Array(NCELL);
+    for (let i = 0; i < NCELL; i++) f[i] = (M.a[i] - P.a[i]) * 100;
+    return { f };
+  }
+  const r = one(kind);
+  if (r.msg) return r;
+  return { f: Float32Array.from(r.a, (v) => v * 100) };
+}
 function panelField(kind, c, day0) {
+  if (isRisk(c)) return riskField(kind, c, day0);
   if (kind === 'obs') {
     if (!S.scen) return { msg: 'Loading…' };
     if (day0 >= NOBS) return { msg: `No observation beyond day ${NOBS}` };
@@ -336,7 +440,7 @@ function drawPanel(p) {
 
   let lo, hi, lut;
   if (p.kind === 'delta') { const m = deltaRange(c).max; lo = -m; hi = m; lut = CMAPS.delta; }
-  else { const r = valueRange(c); lo = r.lo; hi = r.hi; lut = CMAPS[CH[c].cmap]; }
+  else { const r = valueRange(c); lo = r.lo; hi = r.hi; lut = CMAPS[chInfo(c).cmap]; }
   p.scale = { lo, hi, lut };
 
   if (res.f) {
@@ -456,7 +560,7 @@ function drawLegend(p) {
   }
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x0, y0, w, h);
   const c = S.ch, isD = p.kind === 'delta';
-  const unit = isD ? CH[c].dUnit : CH[c].unit;
+  const unit = isD ? chInfo(c).dUnit : chInfo(c).unit;
   const span = hi - lo;
   const dec = span === 0 ? 1 : span < 0.1 ? 3 : span < 1 ? 2 : span < 20 ? 1 : 0;
   ctx.fillStyle = '#c3ccd8'; ctx.font = '10.5px "Segoe UI", sans-serif'; ctx.textBaseline = 'top';
@@ -573,6 +677,18 @@ function impactStats(roll, N) {
     return { n, heat: n ? h / n : NaN, rain: n ? rn / n : NaN, dry: n ? dy / n : NaN };
   });
 }
+// region mean over land cells of the peak daily P(rain > 10 mm) across the N days, in %; null while unavailable
+function riskImpact(kind, N) {
+  const e = ensureRisk(kind);
+  if (!e || e.status !== 'ok') return { status: S.riskOff ? 'off' : e ? e.status : 'loading' };
+  const D = Math.min(N, e.steps), peak = new Float32Array(NCELL);
+  for (let d = 0; d < D; d++) for (let i = 0; i < NCELL; i++) { const v = e.rain[d * NCELL + i]; if (v > peak[i]) peak[i] = v; }
+  return { status: 'ok', regions: REGIONS.map((R) => {
+    const bi = boxIdx(R); let n = 0, s = 0;
+    for (let r = bi.r0; r <= bi.r1; r++) for (let c = bi.c0; c <= bi.c1; c++) { const i = r * NC + c; if (S.land[i]) { n++; s += peak[i]; } }
+    return n ? s / n * 100 : NaN;
+  }) };
+}
 function waterRisk(P, M) {
   const pct = P.rain > 0 ? (M.rain - P.rain) / P.rain * 100 : 0;
   const dDry = M.dry - P.dry;
@@ -598,21 +714,36 @@ function renderImpact() {
     `<b>Water-stress risk</b>: HIGH if rain ≤ −25 % vs Prime or ≥ 3 extra dry days; MODERATE if ≤ −10 % or ≥ 1.5 extra dry days; ` +
     `WET (waterlogging watch) if ≥ +30 % and ≥ 50 mm; LOW otherwise or if both runs are below 5 mm. ` +
     `<b>Heat risk</b>: HIGH if ≥ 3 heat days and ≥ 1 more than Prime; MODERATE if ≥ 0.5 more. Regions: ` +
-    REGIONS.map((R) => `${R.name} ${R.s}–${R.n}°N ${R.w}–${R.e}°E`).join('; ') + '.';
+    REGIONS.map((R) => `${R.name} ${R.s}–${R.n}°N ${R.w}–${R.e}°E`).join('; ') + '. ' +
+    (S.riskOff
+      ? `<b>Chance of heavy-rain day</b> hidden: this server’s /risk endpoint returned ${S.riskOff}.`
+      : `<b>Chance of heavy-rain day</b> = for each land cell the highest daily calibrated P(rain &gt; ${RISK_MM} mm/day) over the ${N || 'N'} days, ` +
+        `averaged over the region (from POST /risk); the advisory mentions it only when it moves by ≥ 5 percentage points. ${RISK_METHOD}`);
   if (S.online === false && !S.prime) { body.innerHTML = '<p class="muted">Server offline — no live rollout to analyse.</p>'; return; }
   if (!S.prime) { body.innerHTML = '<p class="muted">Waiting for the live Prime run…</p>'; return; }
   const P = impactStats(S.prime, N);
   const M = S.multi && S.multiSteps === N ? impactStats(S.multi, N) : null;
+  const RP = S.riskOff ? null : riskImpact('prime', N);
+  const RM = S.riskOff || !M ? null : riskImpact('multi', N);
+  const showR = !S.riskOff;
+  const cmpR = (k) => {
+    if (RP.status !== 'ok') return `<span class="muted">${RP.status === 'err' ? 'failed' : '…'}</span>`;
+    const p = RP.regions[k];
+    if (!RM) return `${fmt(p, 0)} %`;
+    if (RM.status !== 'ok') return `${fmt(p, 0)} % <span class="arrow">→</span> <span class="muted">${RM.status === 'err' ? 'failed' : '…'}</span>`;
+    const m = RM.regions[k], d = m - p, cls = Math.abs(d) < 0.5 ? '' : d > 0 ? 'up' : 'down';
+    return `${fmt(p, 0)} <span class="arrow">→</span> <b class="${cls}">${fmt(m, 0)}</b> %`;
+  };
   const cmp = (p, m, dec, unit = '') => {
     if (!M) return `${fmt(p, dec)}${unit}`;
     const d = m - p, cls = Math.abs(d) < Math.pow(10, -dec) / 2 ? '' : d > 0 ? 'up' : 'down';
     return `${fmt(p, dec)} <span class="arrow">→</span> <b class="${cls}">${fmt(m, dec)}</b>${unit}`;
   };
-  let html = `<table class="imp"><thead><tr><th>Region</th><th>Heat-stress days / cell</th><th>${N}-day rain (mm)</th><th>Δ rain</th><th>Dry days / cell</th><th>Water stress</th><th>Heat</th></tr></thead><tbody>`;
+  let html = `<table class="imp"><thead><tr><th>Region</th><th>Heat-stress days / cell</th><th>${N}-day rain (mm)</th><th>Δ rain</th><th>Dry days / cell</th>${showR ? `<th title="Region mean over land cells of the peak daily P(rain &gt; ${RISK_MM} mm) across the ${N} days">Chance of heavy-rain day (peak daily P)</th>` : ''}<th>Water stress</th><th>Heat</th></tr></thead><tbody>`;
   const adv = [];
   REGIONS.forEach((R, k) => {
     const p = P[k], m = M ? M[k] : null;
-    if (!p.n) { html += `<tr><td>${R.name}</td><td colspan="6" class="muted">no land cells</td></tr>`; return; }
+    if (!p.n) { html += `<tr><td>${R.name}</td><td colspan="${showR ? 7 : 6}" class="muted">no land cells</td></tr>`; return; }
     let wr = null, hr = null;
     if (m) { wr = waterRisk(p, m); hr = heatRisk(p, m); }
     html += `<tr><td>${R.name} <span class="muted">(${p.n})</span></td>` +
@@ -620,6 +751,7 @@ function renderImpact() {
       `<td class="num">${cmp(p.rain, m && m.rain, 0)}</td>` +
       `<td class="num">${m ? `<b class="${wr.pct > 0.5 ? 'up' : wr.pct < -0.5 ? 'down' : ''}">${sgn(wr.pct, 0)} %</b>` : '—'}</td>` +
       `<td class="num">${cmp(p.dry, m && m.dry, 1)}</td>` +
+      (showR ? `<td class="num">${cmpR(k)}</td>` : '') +
       `<td>${m ? `<span class="risk ${wr.level}">${wr.level}</span>` : '<span class="risk NA">run shock</span>'}</td>` +
       `<td>${m ? `<span class="risk ${hr}">${hr}</span>` : '<span class="risk NA">—</span>'}</td></tr>`;
     if (m) {
@@ -627,9 +759,12 @@ function renderImpact() {
       const rainTxt = dryBase
         ? `Rain ${fmt(p.rain, 1)} → ${fmt(m.rain, 1)} mm over ${R.name} in the next ${N} days → kharif sowing water-stress risk ${wr.level}`
         : `Rain ${sgn(wr.pct, 0)}% vs Prime over ${R.name} in the next ${N} days → kharif sowing water-stress risk ${wr.level === 'WET' ? 'LOW (excess rain)' : wr.level}`;
+      let hrTxt = '';           // mention the heavy-rain chance only when it moves by >= 5 percentage points
+      if (RP && RP.status === 'ok' && RM && RM.status === 'ok' && Math.abs(RM.regions[k] - RP.regions[k]) >= 5)
+        hrTxt = `; chance of a heavy-rain day ${fmt(RP.regions[k], 0)}% → ${fmt(RM.regions[k], 0)}%`;
       const heatTxt = `heat-stress days ${fmt(p.heat, 1)} → ${fmt(m.heat, 1)} per land cell (heat risk ${hr})`;
       const worst = wr.level === 'HIGH' || hr === 'HIGH' ? 'HIGH' : wr.level === 'MODERATE' || hr === 'MODERATE' ? 'MODERATE' : wr.level === 'WET' ? 'WET' : 'LOW';
-      adv.push(`<li class="${worst}" title="Rules in the footnote below">${rainTxt}${wr.note ? ' (' + wr.note + ')' : ''}; ${heatTxt}.</li>`);
+      adv.push(`<li class="${worst}" title="Rules in the footnote below">${rainTxt}${wr.note ? ' (' + wr.note + ')' : ''}${hrTxt}; ${heatTxt}.</li>`);
     }
   });
   html += '</tbody></table>';
@@ -696,14 +831,17 @@ function renderAll() {
   const N = S.primeSteps || S.steps;
   $('dayTxt').textContent = S.day;
   $('dateTxt').textContent = `Forecast day ${S.day} of ${N} → valid ${dateOf(S.scen.last_input_day, S.day)} (start state ends ${dateOf(S.scen.last_input_day, 0)})`;
-  const ch = CH[S.ch];
-  $('subPrime').textContent = `unshocked rollout · ${ch.key} (${ch.unit})`;
-  $('subObs').textContent = `what really happened · ${ch.key}`;
+  const ch = chInfo(S.ch), rk = isRisk(S.ch);
+  $('subPrime').textContent = rk ? `calibrated chance · ${ch.name} (%)` : `unshocked rollout · ${ch.key} (${ch.unit})`;
+  $('subObs').textContent = rk ? `what really happened · ${ch.obsName} (yes = 100 %)` : `what really happened · ${ch.key}`;
+  renderRiskNote();
   $('subMulti').textContent = S.multi ? S.multiDesc : 'shocked rollout';
   $('subMulti').title = S.multi ? S.multiDesc : '';
   if (S.multi && S.prime) {
     const m = deltaRange(S.ch).max;
-    $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly — Multiverse ≡ Prime' : `max |Δ| ${ch.key} (all days) = ${m.toPrecision(3)} ${ch.dUnit}`;
+    $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly — Multiverse ≡ Prime'
+      : rk && !(riskOk('prime') && riskOk('multi')) ? `${ch.key} · percentage points`
+      : `max |Δ| ${ch.key} (all days) = ${rk ? m.toFixed(1) : m.toPrecision(3)} ${ch.dUnit}`;
   } else $('subDelta').textContent = 'diverging, symmetric, white = 0';
   renderReadout();
 }
@@ -711,15 +849,30 @@ function renderAll() {
 function renderReadout() {
   const el = $('readout');
   if (!S.hover) { el.innerHTML = 'Hover a map to read values. Drag on a map to paint a shock box (snaps to 1° cells).'; return; }
-  const { r, col } = S.hover, i = r * NC + col, ch = CH[S.ch];
+  const { r, col } = S.hover, i = r * NC + col, ch = chInfo(S.ch), rk = isRisk(S.ch);
   const parts = [`<b>${(LAT0 + r).toFixed(1)}°N ${(LON0 + col).toFixed(1)}°E</b> ${S.land[i] ? 'land' : 'sea'} · ${ch.key}`];
   for (const p of panels) {
     if (p.el.hidden || !p.field) continue;
     const name = { obs: 'Observed', prime: 'Prime', multi: 'Multiverse', delta: 'Δ' }[p.kind];
     const v = p.field[i];
+    if (rk) {
+      parts.push(`${name} <b>${p.kind === 'obs' ? (v ? 'yes' : 'no') : p.kind === 'delta' ? `${v > 0 ? '+' : ''}${v.toFixed(1)} pp` : `${v.toFixed(0)} %`}</b>`);
+      continue;
+    }
     parts.push(`${name} <b>${p.kind === 'delta' && v > 0 ? '+' : ''}${v.toFixed(Math.abs(v) < 1 && v !== 0 ? 3 : 2)}</b>`);
   }
-  el.innerHTML = parts.join(' &nbsp;·&nbsp; ') + ` ${ch.unit}`;
+  el.innerHTML = parts.join(' &nbsp;·&nbsp; ') + (rk ? '' : ` ${ch.unit}`);
+}
+
+function renderRiskNote() {
+  const el = $('riskNote');
+  if (S.riskOff) { el.hidden = false; el.className = 'risknote off'; el.textContent = `Calibrated risk maps are not available on this server (/risk → ${S.riskOff}), so they are hidden.`; return; }
+  el.hidden = !isRisk(S.ch);
+  if (el.hidden) return;
+  const e = riskOk('prime');
+  el.className = 'risknote';
+  el.innerHTML = `<b>${chInfo(S.ch).name}</b> — calibrated chance per cell and day; fades to normal odds when the model can’t tell. ` +
+    RISK_METHOD + (e ? ` <span class="muted">(${e.members} members, ${fmt(e.ms, 0)} ms server)</span>` : '');
 }
 
 // ---------------------------------------------------------------- interaction
@@ -814,7 +967,10 @@ async function init() {
     $('chSel').add(new Option(`${c.name} (${c.unit})`, k));
     $('pChSel').add(new Option(c.key, k));
   });
-  $('chSel').onchange = () => { S.ch = +$('chSel').value; renderAll(); };
+  const og = document.createElement('optgroup'); og.label = 'Calibrated risk (5-member ensemble)';
+  RISK.forEach((c, k) => og.appendChild(new Option(c.name, NCH + k)));
+  $('chSel').appendChild(og);
+  $('chSel').onchange = () => { S.ch = +$('chSel').value; if (S.riskOff && isRisk(S.ch)) setRiskOff(S.riskOff); renderAll(); };
   $('pChSel').onchange = $('pModeSel').onchange = () => renderSidebar();
   $('stepsIn').onchange = () => {
     let n = Math.round(+$('stepsIn').value); if (!(n >= 1)) n = 10; n = Math.min(30, n);
@@ -841,6 +997,7 @@ async function init() {
   $('baseUrl').onchange = () => {
     S.base = $('baseUrl').value.trim().replace(/\/+$/, '') || DEFAULT_BASE;
     $('baseUrl').value = S.base; localStorage.setItem('mom.base', S.base);
+    S.riskData = { prime: null, multi: null }; setRiskOff(null);
     S.online = null; renderStatus(); apiHealth();
   };
   $('scenSel').onchange = () => loadScenario($('scenSel').value).catch((e) => setRunMsg('Scenario load failed: ' + e.message, 'err'));
