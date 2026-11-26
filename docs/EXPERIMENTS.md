@@ -27,3 +27,11 @@ Teleport check (judge's Euclidean `far_frac_max`, must be < 0.05): 0.000 on all 
 reach in Chebyshev distance (8 cells/day for ens3). On day 1 a diagonal corner of that square lies 11.3 cells away, beyond
 the judge's 3 + 8 = 11, so the Euclidean bound is not strict; tests/test_model.py::test_judge_teleport_check_point_shock
 checks the judge's own metric on a point shock.
+
+| id | what | named pts/70 | named meanSS | dense meanSS | CSI skill (named/dense) | causality/15 | notes |
+|---|---|---:|---:|---:|---|---:|---|
+| v1s2 | v1 recipe, seed 2 | – | – | – | – | – | member only |
+| adv1s1 | adv1 recipe, seed 1 | 67.81 | +0.129 | +0.075 | +0.128 / +0.087 | – | single members cluster at dense +0.071–0.076 |
+| **ens5** | **mean of v1, v1s1, v1s2, adv1, adv1s1 (promoted)** | 68.12 | **+0.163** | **+0.113** | +0.147 / +0.095 | 13.12 in 6/6 | dense ≈ 28.1 + 14.3 + 10 + 13.1 = 65.5/70; gate dense +0.231; warm_ocean full marks 6/6, monsoon_stall never propagates |
+
+ens5 container check: validator all pass, 0.34–0.48 s per call (5 members), ready in 6 s, 201 MB.

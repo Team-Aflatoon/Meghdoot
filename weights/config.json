@@ -1,5 +1,5 @@
 {
- "name": "stencil-ens_v1_s1_adv1",
+ "name": "stencil-ens5",
  "members": [
   {
    "file": "model_0.pt",
@@ -18,9 +18,23 @@
   {
    "file": "model_2.pt",
    "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "from": "v1s2"
+  },
+  {
+   "file": "model_3.pt",
+   "width": 96,
    "blocks": 4,
    "advect": true,
    "from": "adv1"
+  },
+  {
+   "file": "model_4.pt",
+   "width": 96,
+   "blocks": 4,
+   "advect": true,
+   "from": "adv1s1"
   }
  ]
 }
