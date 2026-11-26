@@ -216,8 +216,7 @@ Decision: not shipped. The best variant gains about +0.35 expected points, well 
 and B loses under the pooled reading and puts a clamp at the judge's exact 10 mm threshold into reviewed code. With
 the metric-aligned loss the non-rain channels are already calibrated (C ≈ the shipped model).
 
-## Ideas from other teams' public repos: tested, not shipped
-
+## Two more ideas: tested, not shipped
 
 | idea | test | result | verdict |
 |---|---|---|---|
