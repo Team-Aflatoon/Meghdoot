@@ -15,6 +15,12 @@ function loadTheme() {
   }
   probe.remove();
   TH.font = cssv('--font-body') || 'system-ui, sans-serif';
+  try {                          // Δ map zero = the dark ground; resolve the token to sRGB through a 1x1 canvas
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+    const x = cv.getContext('2d'); x.fillStyle = TH.paper3; x.fillRect(0, 0, 1, 1);
+    const d = x.getImageData(0, 0, 1, 1).data;
+    setDivergingZero([d[0], d[1], d[2]]);
+  } catch (e) { /* keep the fallback ground colour from colormaps.js */ }
 }
 function alpha(c, a) {           // works for rgb(), rgba(), oklch() and color() strings
   if (/^#[0-9a-f]{6}$/i.test(c)) { const n = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)); return `rgba(${n.join(',')},${a})`; }
@@ -452,7 +458,7 @@ function extract(arr, day0, c) {
 
 function drawPanel(p) {
   const cssW = p.cv.parentElement.clientWidth;
-  const padL = 26, padR = 4, padT = 4, padB = 16;
+  const padL = 34, padR = 4, padT = 4, padB = 18;
   const cs = (cssW - padL - padR) / NC;
   const cssH = Math.round(cs * NR + padT + padB);
   const ctx = sizeCanvas(p.cv, cssW, cssH);
@@ -491,7 +497,7 @@ function drawPanel(p) {
   p.field = res.f || null;
 
   // graticule
-  ctx.font = `10px ${TH.font}`; ctx.fillStyle = TH.muted; ctx.strokeStyle = alpha(TH.ink, 0.10); ctx.lineWidth = 1;
+  ctx.font = `12px ${TH.font}`; ctx.fillStyle = TH.muted; ctx.strokeStyle = alpha(TH.ink, 0.10); ctx.lineWidth = 1;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   for (const lat of [10, 20, 30]) {
     const y = g.top + (LAT_N_EDGE - lat) * cs;
@@ -502,7 +508,8 @@ function drawPanel(p) {
   for (const lon of [70, 80, 90, 100]) {
     const x = g.left + (lon - LON_W_EDGE) * cs;
     ctx.beginPath(); ctx.moveTo(x, g.top); ctx.lineTo(x, g.top + g.h); ctx.stroke();
-    ctx.fillText(lon + '°E', x, g.top + g.h + 2);
+    ctx.textAlign = lon === 100 ? 'right' : lon === 70 ? 'left' : 'center';
+    ctx.fillText(lon + '°E', lon === 100 ? Math.min(x, g.left + g.w) : x, g.top + g.h + 2);
   }
 
   // coastline
@@ -512,7 +519,7 @@ function drawPanel(p) {
     for (const s of S.coast) { ctx.moveTo(X(s[0]), Y(s[1])); ctx.lineTo(X(s[2]), Y(s[3])); }
     ctx.stroke();
   };
-  strokeCoast('rgba(0,0,0,0.65)', 3); strokeCoast('rgba(255,255,255,0.9)', 1.2);
+  strokeCoast(alpha(TH.paper3, 0.8), 3); strokeCoast(alpha(TH.ink, 0.9), 1.2);
 
   // wind arrows
   if (S.arrows && p.kind !== 'delta') drawArrows(ctx, p, g, day0);
@@ -521,7 +528,7 @@ function drawPanel(p) {
   const rectDeg = (b) => [g.left + (b.w - LON_W_EDGE) * cs, g.top + (LAT_N_EDGE - b.n) * cs, (b.e - b.w) * cs, (b.n - b.s) * cs];
   if (S.regions) {
     ctx.setLineDash([2, 3]); ctx.strokeStyle = TH.ok; ctx.lineWidth = 1.2;
-    ctx.fillStyle = TH.ok; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `10px ${TH.font}`;
+    ctx.fillStyle = TH.ok; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = `12px ${TH.font}`;
     for (const R of REGIONS) { const [x, y, w, h] = rectDeg(R); ctx.strokeRect(x, y, w, h); ctx.fillText(R.name, x + 2, y + 2); }
     ctx.setLineDash([]);
   }
@@ -533,25 +540,24 @@ function drawPanel(p) {
       const b = S.multiBox;
       const [x, y, w, h] = rectDeg({ s: b.s - reach, n: b.n + reach, w: b.w - reach, e: b.e + reach });
       ctx.save(); ctx.beginPath(); ctx.rect(g.left, g.top, g.w, g.h); ctx.clip();
-      ctx.setLineDash([1.5, 3]); ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([1.5, 3]); ctx.strokeStyle = alpha(TH.ink, 0.85); ctx.lineWidth = 1.6; ctx.strokeRect(x, y, w, h);
       ctx.restore(); ctx.setLineDash([]);
     }
   }
 
-  // shock box (current painter box; dashed) — on all panels
+  // shock box (current painter box; solid amber over a dark under-stroke) — on all panels
   const box = S.drag ? S.drag.box : S.shock.box;
   if (box) {
     const [x, y, w, h] = rectDeg(box);
-    ctx.setLineDash([5, 3]); ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.strokeRect(x, y, w, h);
-    ctx.strokeStyle = TH.accent; ctx.lineWidth = 1.4; ctx.strokeRect(x, y, w, h);
     ctx.setLineDash([]);
+    ctx.strokeStyle = TH.paper3; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = TH.accent; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
   }
 
   // hover marker
   if (S.hover) {
     const x = g.left + S.hover.col * cs, y = g.top + (NR - 1 - S.hover.r) * cs;
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.strokeRect(x, y, cs, cs);
+    ctx.strokeStyle = TH.ink; ctx.lineWidth = 1.2; ctx.strokeRect(x, y, cs, cs);
   }
   if (S.showCities || S.city !== CITY_ALL) drawCities(ctx, g);
   drawLegend(p);
@@ -560,23 +566,23 @@ function drawPanel(p) {
 // city dots + short labels; the selected city is drawn larger, with its full name and its grid cell outlined
 const cityXY = (g, ct) => [g.left + (ct.lon - LON_W_EDGE) * g.cs, g.top + (LAT_N_EDGE - ct.lat) * g.cs];
 function drawCities(ctx, g) {
-  ctx.font = `9.5px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  ctx.font = `11px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   CITIES.forEach((ct, k) => {
     const sel = k === S.city;
     if (!sel && !S.showCities) return;
     const [x, y] = cityXY(g, ct);
     if (sel) {
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
+      ctx.strokeStyle = alpha(TH.paper3, 0.8); ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
       ctx.strokeStyle = TH.cool; ctx.lineWidth = 1.5; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
     }
     ctx.beginPath(); ctx.arc(x, y, sel ? 3.6 : 2.3, 0, 7);
-    ctx.fillStyle = sel ? TH.cool : '#ffffff'; ctx.fill();
-    ctx.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.85)'; ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
+    ctx.fillStyle = sel ? TH.cool : TH.ink; ctx.fill();
+    ctx.strokeStyle = sel ? TH.ink : alpha(TH.paper3, 0.9); ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
     const t = sel ? ct.name : ct.short, tx = x + ct.dx * (sel ? 6 : 4.5);
     ctx.textAlign = ct.dx > 0 ? 'left' : 'right';
-    ctx.font = (sel ? '600 11px' : '9.5px') + ' ' + TH.font;
-    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2.6; ctx.strokeText(t, tx, y);
-    ctx.fillStyle = sel ? TH.ink : 'rgba(255,255,255,0.92)'; ctx.fillText(t, tx, y);
+    ctx.font = (sel ? '600 13px' : '11px') + ' ' + TH.font;
+    ctx.strokeStyle = alpha(TH.paper3, 0.85); ctx.lineWidth = 3; ctx.strokeText(t, tx, y);
+    ctx.fillStyle = TH.ink; ctx.fillText(t, tx, y);
   });
 }
 
@@ -594,7 +600,7 @@ function drawArrows(ctx, p, g, day0) {
     const L = Math.min(sp * scale, cs * 3.2), ux = u / sp, uy = -v / sp;
     const x0 = g.left + (col + 0.5) * cs - ux * L / 2, y0 = g.top + (NR - 0.5 - r) * cs - uy * L / 2;
     const x1 = x0 + ux * L, y1 = y0 + uy * L, hl = Math.min(5, L * 0.45);
-    for (const [st, w] of [['rgba(0,0,0,0.7)', 2.6], ['#ffffff', 1.1]]) {
+    for (const [st, w] of [[alpha(TH.paper3, 0.75), 2.6], [TH.ink, 1.1]]) {
       ctx.strokeStyle = st; ctx.lineWidth = w; ctx.beginPath();
       ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
       ctx.moveTo(x1, y1); ctx.lineTo(x1 - hl * (ux * 0.85 - uy * 0.5), y1 - hl * (uy * 0.85 + ux * 0.5));
@@ -609,18 +615,18 @@ function drawLegend(p) {
   const ctx = sizeCanvas(p.lg, cssW, 34);
   ctx.clearRect(0, 0, cssW, 34);
   const { lo, hi, lut } = p.scale;
-  const x0 = 26, w = cssW - 30, y0 = 2, h = 10;
+  const x0 = 34, w = cssW - 38, y0 = 2, h = 10;
   for (let i = 0; i < w; i++) {
     const k = Math.round(i / (w - 1) * 255);
     ctx.fillStyle = `rgb(${lut[k * 3]},${lut[k * 3 + 1]},${lut[k * 3 + 2]})`;
     ctx.fillRect(x0 + i, y0, 1.5, h);
   }
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.strokeRect(x0, y0, w, h);
+  ctx.strokeStyle = alpha(TH.ink, 0.2); ctx.strokeRect(x0, y0, w, h);
   const c = S.ch, isD = p.kind === 'delta';
   const unit = isD ? chInfo(c).dUnit : chInfo(c).unit;
   const span = hi - lo;
   const dec = span === 0 ? 1 : span < 0.1 ? 3 : span < 1 ? 2 : span < 20 ? 1 : 0;
-  ctx.fillStyle = TH.ink2; ctx.font = `10.5px ${TH.font}`; ctx.textBaseline = 'top';
+  ctx.fillStyle = TH.ink2; ctx.font = `13px ${TH.font}`; ctx.textBaseline = 'top';
   const lbl = (v) => (isD && v > 0 ? '+' : '') + v.toFixed(dec);
   ctx.textAlign = 'left'; ctx.fillText(lbl(lo), x0, y0 + h + 3);
   ctx.textAlign = 'center'; ctx.fillText(isD ? `0  (${unit})` : `${lbl((lo + hi) / 2)}  ${unit}`, x0 + w / 2, y0 + h + 3);
@@ -656,8 +662,16 @@ function drawSpread() {
   const cssW = cv.clientWidth, cssH = 210;
   const ctx = sizeCanvas(cv, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);
-  const L = 46, R = 40, T = 10, B = 26, w = cssW - L - R, h = cssH - T - B;
-  ctx.font = `11px ${TH.font}`;
+  ctx.font = `12px ${TH.font}`;
+  // legend items are laid out first, in a strip above the plot (wrapping if narrow), so they never cover the data
+  const lg = [[TH.accent, 'near box (≤2 cells)', 4], [TH.ink2, 'far from box', 4], [alpha(TH.ink, 0.15), 'reach, right axis', 10]];
+  const lgPos = []; let lgx = 4, lgRow = 0;
+  for (const it of lg) {
+    const iw = 16 + ctx.measureText(it[1]).width;
+    if (lgx > 4 && lgx + iw > cssW - 4) { lgx = 4; lgRow++; }
+    lgPos.push([lgx, 10 + lgRow * 16]); lgx += iw + 20;
+  }
+  const L = 52, R = 44, T = 22 + lgRow * 16, B = 24, w = cssW - L - R, h = cssH - T - B;
   const sp = S.spread;
   if (!sp) {
     ctx.fillStyle = TH.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -680,18 +694,21 @@ function drawSpread() {
   ctx.strokeStyle = alpha(TH.ink, 0.08); ctx.fillStyle = TH.muted; ctx.lineWidth = 1;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   const stepDec = Math.max(1, Math.ceil((top - bot) / 5));
+  const decTxt = (e) => (e >= 0 ? String(Math.pow(10, e)) : e >= -5 ? Math.pow(10, e).toFixed(-e) : '1e' + e);
   for (let e = bot; e <= top; e += stepDec) {
     const y = Yl(Math.pow(10, e)); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke();
-    ctx.fillText('1e' + e, L - 4, y);
+    ctx.fillText(decTxt(e), L - 4, y);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   for (let d = 0; d < N; d++) if (N <= 15 || d % 2 === 0) ctx.fillText('d' + (d + 1), X(d), T + h + 4);
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = TH.muted;
-  for (let r = 0; r <= maxReach; r += Math.max(1, Math.ceil(maxReach / 4))) ctx.fillText(r + ' c', L + w + 4, Yr(r));
+  for (let r = 0; r <= maxReach; r += Math.max(1, Math.ceil(maxReach / 4))) ctx.fillText(String(r), L + w + 4, Yr(r));
+  ctx.save(); ctx.translate(cssW - 7, T + h / 2); ctx.rotate(Math.PI / 2);       // right axis title, once
+  ctx.textAlign = 'center'; ctx.fillText('reach (cells)', 0, 0); ctx.restore();
 
   // reach bars
   const bw = Math.max(3, Math.min(14, w / N * 0.35));
-  ctx.fillStyle = alpha(TH.muted, 0.35);
+  ctx.fillStyle = alpha(TH.ink, 0.15);
   sp.reach.forEach((r, d) => { if (r != null) ctx.fillRect(X(d) - bw / 2, Yr(r), bw, T + h - Yr(r)); });
 
   // current day
@@ -703,13 +720,14 @@ function drawSpread() {
     arr.forEach((v, d) => (d ? ctx.lineTo(X(d), Yl(v)) : ctx.moveTo(X(d), Yl(v)))); ctx.stroke();
     ctx.fillStyle = col; arr.forEach((v, d) => { ctx.beginPath(); ctx.arc(X(d), Yl(v), 2.6, 0, 7); ctx.fill(); });
   };
-  line(sp.near, TH.accent); line(sp.far, TH.cool);
+  line(sp.near, TH.accent); line(sp.far, TH.ink2);
 
-  // legend
-  ctx.font = `11px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  const lg = [[TH.accent, 'near box (≤2 cells)'], [TH.cool, 'far from box'], [alpha(TH.muted, 0.8), 'reach (cells, right axis)']];
-  let lx = L + 6;
-  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, T + 6, 10, 4); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 14, T + 8); lx += ctx.measureText(t).width + 30; }
+  // legend, in the strip above the plot
+  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  lg.forEach(([col, t, sw], k) => {
+    const [lx, ly] = lgPos[k];
+    ctx.fillStyle = col; ctx.fillRect(lx, ly - sw / 2, 12, sw); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 16, ly);
+  });
 
   const zero = all.length === 0;
   $('reachRow').innerHTML = zero
@@ -821,12 +839,14 @@ function renderImpact() {
         hrTxt = `; chance of a heavy-rain day ${fmt(RP.regions[k], 0)}% → ${fmt(RM.regions[k], 0)}%`;
       const heatTxt = `heat-stress days ${fmt(p.heat, 1)} → ${fmt(m.heat, 1)} per land cell (heat risk ${hr})`;
       const worst = wr.level === 'HIGH' || hr === 'HIGH' ? 'HIGH' : wr.level === 'MODERATE' || hr === 'MODERATE' ? 'MODERATE' : wr.level === 'WET' ? 'WET' : 'LOW';
-      adv.push(`<li class="${worst}" title="Rules in the footnote below">${rainTxt}${wr.note ? ' (' + wr.note + ')' : ''}${hrTxt}; ${heatTxt}.</li>`);
+      adv.push({ worst, li: `<li class="${worst}" title="Rules under “How this is computed”">${rainTxt}${wr.note ? ' (' + wr.note + ')' : ''}${hrTxt}; ${heatTxt}.</li>` });
     }
   });
   html += '</tbody></table>';
-  if (adv.length) html += `<ul class="advis">${adv.join('')}</ul>`;
-  else html += '<p class="muted" style="margin:8px 0 0">Prime baseline shown. Apply a shock and press “Run multiverse” for the advisory.</p>';
+  const shown = adv.filter((a) => a.worst !== 'LOW');      // presentation only: LOW rows stay in the table above
+  if (shown.length) html += `<ul class="advis">${shown.map((a) => a.li).join('')}</ul>`;
+  else if (adv.length) html += '<p class="muted advnone">No region moves past the advisory threshold.</p>';
+  else html += '<p class="muted advnone">Prime baseline shown. Apply a shock and press “Run multiverse” for the advisory.</p>';
   body.innerHTML = html;
 }
 
@@ -887,27 +907,33 @@ function renderCity() {
   if (!D) { sum.innerHTML = `<span class="muted">${S.online === false ? 'Server offline, no live rollout.' : S.busy ? S.busyMsg : 'Waiting for the live Prime run…'}</span>`; return; }
   const total = (a) => a.reduce((x, y) => x + y, 0), peak = (a) => Math.max(...a);
   const pr = total(D.P.rain), pt = peak(D.P.t);
-  const parts = [`<b>${cityName()}</b>`];
+  // one stat cell per figure, like the top bar: muted label, measured value (Prime → Multiverse, then the change)
+  const cell = (label, value, title = '') => `<span class="cstat"${title ? ` title="${title}"` : ''}><span class="cstat-l">${label}</span> <span class="cstat-v measured">${value}</span></span>`;
+  const dir = (d, eps) => (d > eps ? 'up' : d < -eps ? 'down' : '');
+  const chg = (d, dec) => sgn(+d.toFixed(dec) || 0, dec);      // a change that rounds to zero reads ±0
+  const arrow = ' <span class="arrow">→</span> ';
+  const cells = [];
+  const rp = cityRisk('prime', D.N);
   if (D.M) {
     const mr = total(D.M.rain), mt = peak(D.M.t);
-    const pct = pr >= 0.5 ? ` (${sgn((mr - pr) / pr * 100, 0)}%)` : '';
-    parts.push(`${D.N}-day rain <b>${fmt(pr, 0)} mm</b> → <b class="${mr > pr + 0.5 ? 'up' : mr < pr - 0.5 ? 'down' : ''}">${fmt(mr, 0)} mm</b>${pct}`);
-    parts.push(`peak daily-mean temp <b>${fmt(pt, 1)}</b> → <b>${fmt(mt, 1)} °C</b>`);
-    const rp = cityRisk('prime', D.N), rm = cityRisk('multi', D.N);
-    if (rp != null && rm != null) parts.push(`chance of a heavy-rain day <b>${fmt(rp, 0)}%</b> → <b>${fmt(rm, 0)}%</b>`);
+    const pct = pr >= 0.5 ? ` <span class="cstat-d">(${chg((mr - pr) / pr * 100, 0)}%)</span>` : '';
+    cells.push(cell(`${D.N}-day rain`, `<b>${fmt(pr, 0)} mm</b>${arrow}<b class="${dir(mr - pr, 0.5)}">${fmt(mr, 0)} mm</b>${pct}`));
+    cells.push(cell('Peak daily-mean temp', `<b>${fmt(pt, 1)}</b>${arrow}<b class="${dir(mt - pt, 0.05)}">${fmt(mt, 1)} °C</b> <span class="cstat-d">(${chg(mt - pt, 1)})</span>`,
+      'Warmest daily mean, not the daily maximum'));
+    const rm = cityRisk('multi', D.N);
+    if (rp != null && rm != null) cells.push(cell('Chance of a heavy-rain day', `<b>${fmt(rp, 0)}%</b>${arrow}<b class="${dir(rm - rp, 0.5)}">${fmt(rm, 0)}%</b> <span class="cstat-d">(${chg(rm - rp, 0)} pp)</span>`));
   } else {
-    parts.push(`${D.N}-day rain <b>${fmt(pr, 0)} mm</b>`, `peak daily-mean temp <b>${fmt(pt, 1)} °C</b>`);
-    const rp = cityRisk('prime', D.N);
-    if (rp != null) parts.push(`chance of a heavy-rain day <b>${fmt(rp, 0)}%</b>`);
+    cells.push(cell(`${D.N}-day rain`, `<b>${fmt(pr, 0)} mm</b>`), cell('Peak daily-mean temp', `<b>${fmt(pt, 1)} °C</b>`, 'Warmest daily mean, not the daily maximum'));
+    if (rp != null) cells.push(cell('Chance of a heavy-rain day', `<b>${fmt(rp, 0)}%</b>`));
   }
-  if (D.O) parts.push(`<span class="muted">observed ${D.nObs}-day rain ${fmt(total(D.O.rain), 0)} mm</span>`);
-  sum.innerHTML = parts.join('; ');
+  if (D.O) cells.push(cell(`Observed ${D.nObs}-day rain`, `${fmt(total(D.O.rain), 0)} mm`));
+  sum.innerHTML = cells.join(' ');
 }
 function drawCityChart(cv, D) {
   const cssW = cv.clientWidth, cssH = 176;
   const ctx = sizeCanvas(cv, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.font = `11px ${TH.font}`;
+  ctx.font = `12px ${TH.font}`;
   if (!D) {
     ctx.fillStyle = TH.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(S.online === false ? 'Server offline' : 'Waiting for the live Prime run…', cssW / 2, cssH / 2);
@@ -934,7 +960,14 @@ function drawCityChart(cv, D) {
     const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v); return out;
   };
   const grid = (vals, Y) => { for (const v of vals) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke(); ctx.fillText(v.toFixed(v % 1 ? 1 : 0), L - 4, y); } };
-  grid(ticks(tlo, thi), YT); grid(ticks(0, rhi), YR);
+  const ticks3 = (lo, hi) => {        // temperature panel: the finest round step that gives at most 3 ticks
+    for (const st of [0.5, 1, 2, 5, 10, 20, 50]) {
+      const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v);
+      if (out.length <= 3) return out;
+    }
+    return [];
+  };
+  grid(ticks3(tlo, thi), YT); grid(ticks(0, rhi), YR);
   const vlabel = (t, yc) => { ctx.save(); ctx.translate(9, yc); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText(t, 0, 0); ctx.restore(); };
   vlabel('°C', yT0 + hh / 2); vlabel('mm/day', yR0 + hh / 2);
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -959,7 +992,7 @@ function drawCityChart(cv, D) {
   line(D.P.t, PC, YT, []);
   if (D.M) line(D.M.t, MC, YT, []);
   // legend + current-day values
-  ctx.font = `11px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   const lg = [[PC, 'Prime']]; if (D.M) lg.push([MC, 'Multiverse']); if (D.O) lg.push([OC, `Observed (d1–${D.nObs})`]);
   let lx = L + 2;
   for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, 7, 12, 3); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 16, 8.5); lx += ctx.measureText(t).width + 32; }
@@ -993,6 +1026,7 @@ function renderStatus() {
   $('stepsTxt').textContent = S.primeSteps || S.steps;
   $('offlineBanner').hidden = S.online !== false;
   $('offlineUrl').textContent = S.base;
+  $('hostTxt').textContent = S.base.replace(/^https?:\/\//, '');
 }
 function updateButtons() {
   $('runBtn').disabled = S.busy || !S.scen || S.online === false;
@@ -1042,6 +1076,7 @@ function renderAll() {
   $('dayTxt').textContent = S.day;
   $('dateTxt').textContent = `Forecast day ${S.day} of ${N} → valid ${dateOf(S.scen.last_input_day, S.day)} (start state ends ${dateOf(S.scen.last_input_day, 0)})`;
   const ch = chInfo(S.ch), rk = isRisk(S.ch);
+  $('chSel').title = ch.name;
   $('subPrime').textContent = rk ? `calibrated chance, ${ch.name} (%)` : `unshocked rollout, ${ch.key} (${ch.unit})`;
   $('subObs').textContent = rk ? `what really happened, ${ch.obsName} (yes = 100 %)` : `what really happened, ${ch.key}`;
   renderRiskNote();
@@ -1052,7 +1087,7 @@ function renderAll() {
     $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly, Multiverse ≡ Prime'
       : rk && !(riskOk('prime') && riskOk('multi')) ? `${ch.key}, percentage points`
       : `max |Δ| ${ch.key} (all days) = ${rk ? m.toFixed(1) : m.toPrecision(3)} ${ch.dUnit}`;
-  } else $('subDelta').textContent = 'diverging, symmetric, white = 0';
+  } else $('subDelta').textContent = 'diverging, symmetric, dark = 0';
   renderReadout();
 }
 
@@ -1178,11 +1213,11 @@ async function init() {
   $('appTitle').textContent = APP_TITLE;
   $('baseUrl').value = S.base;
   CH.forEach((c, k) => {
-    $('chSel').add(new Option(`${c.name} (${c.unit})`, k));
-    $('pChSel').add(new Option(c.key, k));
+    const o = new Option(`${c.key} (${c.unit})`, k); o.title = `${c.name} (${c.unit})`; $('chSel').add(o);
+    const q = new Option(c.key, k); q.title = c.name; $('pChSel').add(q);
   });
   const og = document.createElement('optgroup'); og.label = 'Calibrated risk (5-member ensemble)';
-  RISK.forEach((c, k) => og.appendChild(new Option(c.name, NCH + k)));
+  RISK.forEach((c, k) => { const o = new Option(c.key, NCH + k); o.title = c.name; og.appendChild(o); });
   $('chSel').appendChild(og);
   $('chSel').onchange = () => { S.ch = +$('chSel').value; if (S.riskOff && isRisk(S.ch)) setRiskOff(S.riskOff); renderAll(); };
   $('pChSel').onchange = $('pModeSel').onchange = () => renderSidebar();
