@@ -51,6 +51,12 @@ class Simulator:
         # Optional per-lead quantile mapping of rain (train/fit_rain_qm.py): a fixed monotone curve per lead maps the
         # ensemble's rain quantiles onto observed rain quantiles, restoring heavy rain that averaging smooths away.
         # Pointwise (each cell independently), so locality and the no-teleport guarantee are untouched.
+        # Optional calibration of the UNSHOCKED forecast (train/fit_calib.py): out_k = clim_k + lam[k,c] * (raw_k - clim_k);
+        # optionally (rain_event) the >10 mm/day event is decided on the raw rain with a per-lead threshold. A shocked call is
+        # served as calibrated(base) + (raw(shocked) - raw(base)): the calibration never touches the shock response, and a
+        # zero perturbation takes the exact unshocked path (bit-identical null shock).
+        cp = weights_dir / "calib.npz"
+        self.calib = dict(np.load(cp)) if cp.exists() else None
         qp = weights_dir / "rain_qm.npz"
         self.rain_qm = dict(np.load(qp)) if qp.exists() else None
         self.static = t(np.load(weights_dir / "static.npy"))
@@ -105,7 +111,33 @@ class Simulator:
                 torch.tensor([doy], device=self.device, dtype=torch.long), doy)
 
     @torch.no_grad()
+    def _raw(self, init_states, doy_sincos, steps, perturbation=None):
+        xt, d0, doy = self._prepare(init_states, doy_sincos, perturbation)
+        out = None
+        for net in self.nets:
+            r = rollout(net, xt, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0]
+            out = r if out is None else out + r
+        return (out / len(self.nets)).cpu().numpy().astype("f4"), doy
+
+    def _calibrate(self, raw, doy):
+        c_all = self.clim.cpu().numpy(); lam = self.calib["lam"]; out = raw.copy()
+        for k in range(raw.shape[0]):
+            j = min(k, lam.shape[0] - 1); c = c_all[(doy + 1 + k) % c_all.shape[0]]
+            out[k] = c + lam[j][:, None, None] * (raw[k] - c)
+            if "tau10" in self.calib:
+                ev = raw[k, 1] > self.calib["tau10"][j]
+                out[k, 1] = np.where(ev, np.maximum(out[k, 1], 10.01), np.minimum(out[k, 1], 9.99))
+        return out
+
+    @torch.no_grad()
     def simulate(self, init_states: np.ndarray, doy_sincos, steps: int, perturbation=None) -> np.ndarray:
+        if self.calib is not None:
+            base, doy = self._raw(init_states, doy_sincos, steps)
+            out = self._calibrate(base, doy)
+            if perturbation is not None and np.any(np.asarray(perturbation, dtype="f4") != 0):
+                shocked, _ = self._raw(init_states, doy_sincos, steps, perturbation)
+                out = out + (shocked - base)
+            return self._finish(out, doy)
         xt, d0, doy = self._prepare(init_states, doy_sincos, perturbation)
         rs = [rollout(net, xt, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0] for net in self.nets]
         out = rs[0]

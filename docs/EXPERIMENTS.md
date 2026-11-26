@@ -200,3 +200,19 @@ days 1 / 4 / 8. Container: 0.25 s per call, 199 MB. Tests 15/15.
 Lesson for the log: train on what you are scored on. The independent agent found it because it was not anchored on our history.
 
 Per-lead skill vs the best reference (dense 144, 2020–21): ens5 +0.217 / +0.024 / −0.067 → **ens5sk +0.284 / +0.072 / −0.019** at days 1 / 4 / 8.
+
+## Calibration of the unshocked forecast on ens5sk (independent agent's idea 2): tried, not shipped
+
+The serving path (optional, `calib.npz`, off by default) is: calibrated(base) + (raw shocked − raw base). The shock
+response is never calibrated, and a zero shock takes the exact unshocked path. Fit 2020, score 2021 (71 dense windows):
+
+| variant | pooled SS | per-lead SS | CSI skill | expected pts pooled / per-lead (forecast + CSI) |
+|---|---:|---:|---:|---|
+| **ens5sk (shipped)** | +0.159 | +0.116 | **+0.107** | **45.0** / 44.0 |
+| A shrink all channels | +0.164 | +0.123 | +0.095 | 44.25 / 44.25 |
+| B shrink + rain event threshold (rain forced to 10.01 / 9.99 by a tuned threshold) | +0.163 | +0.122 | +0.099 | 44.85 / 44.85 |
+| C shrink all but rain | +0.159 | +0.117 | +0.107 | 45.0 / 44.25 |
+
+Decision: not shipped. The best variant gains about +0.35 expected points, well inside the noise of a 5-window judge,
+and B loses under the pooled reading and puts a clamp at the judge's exact 10 mm threshold into reviewed code. With
+the metric-aligned loss the non-rain channels are already calibrated (C ≈ the shipped model).
