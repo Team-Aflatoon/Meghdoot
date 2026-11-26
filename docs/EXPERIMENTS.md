@@ -35,3 +35,65 @@ checks the judge's own metric on a point shock.
 | **ens5** | **mean of v1, v1s1, v1s2, adv1, adv1s1 (promoted)** | 68.12 | **+0.163** | **+0.113** | +0.147 / +0.095 | 13.12 in 6/6 | dense ≈ 28.1 + 14.3 + 10 + 13.1 = 65.5/70; gate dense +0.231; warm_ocean full marks 6/6, monsoon_stall never propagates |
 
 ens5 container check: validator all pass, 0.34–0.48 s per call (5 members), ready in 6 s, 201 MB.
+
+## Anomaly damping (post-processing) and aggregation ambiguity
+
+The contract does not say how the judge averages skill over leads 1/4/8. Our local judge pools the three leads
+into one RMSE per channel (as `rmse_lat` does over leading dims). An independent review flagged the alternative
+"SS per lead, then mean", which is harsher because day 8 is weaker than climatology. `train/evaluate.py` now
+prints both ("alt aggregation").
+
+ens5 per lead (dense 144, 2020–21): SS vs best ref +0.217 (day 1), +0.024 (day 4), −0.067 (day 8).
+
+Damping: out_k = clim_k + λ[k,c]·(out_k − clim_k), λ fitted by least squares on **2020**, scored on **2021 only**
+(71 dense windows; out of sample for both the members and λ):
+
+| variant | pooled SS | per-lead SS | CSI skill | causality (3 windows) | decision |
+|---|---:|---:|---:|---|---|
+| ens5, no damping | +0.120 | +0.064 | +0.100 | 13.12 ×3 | – |
+| damp all channels | +0.134 | +0.080 (quick test) | +0.090 | 13.12, 11.25, 13.12 | rejected: CSI −1.6 pts, heavy-rain shock stops propagating |
+| **damp all except rain** | **+0.121** | **+0.066** | **+0.100** | 13.12 ×3 | **adopted**: never worse under either reading |
+
+Shipped λ: refit on 2020+2021 (238 windows) with the selection members (out of sample), rain λ = 1:
+day 1 all 1.0; day 8 t2m 0.82, u10 0.60, v10 0.56, msl 0.89, tcwv 0.68; day 14 0.25–0.60.
+
+Independent review (fresh agent): no gate or disqualification risk found; fresh clone passes the offline container on
+py3.12/torch 2.15 and py3.10/torch 2.1.2. Seasonal causality over 72 windows (every 10th day of 2020–21, ens5):
+warm_ocean propagates 88%, stable 96% (winter weakest); monsoon_stall propagates 8%; mean 12.97/15, min 11.25.
+Anti-blur on a random draw of 5 windows: 24.5% chance of 8.33 instead of 10 (dry-day rain variance), expected 9.61.
+Fixed: OverflowError → 422, NaN input → climatology fill (tests added).
+
+## Calibrated ensemble probabilities (dashboard risk maps; not part of /simulate)
+
+p_raw = share of the 5 members above the threshold; p_cal = w[k]·p_raw + (1 − w[k])·base[month, cell], where base =
+historical frequency in training years (< 2020) and w fitted by least squares per lead. Brier skill score vs base.
+Fit on 2020, scored on 2021 (selection ensemble ens5, every 3rd day):
+
+| event | day 1 raw → cal | day 4 raw → cal | day 8 raw → cal | mean BSS days 1–10 (cal) |
+|---|---|---|---|---:|
+| heavy rain (> 10 mm/day) | +0.200 → **+0.328** | −0.618 → **+0.030** | −0.923 → **+0.004** | +0.059 |
+| heat (daily-mean t2m ≥ 34 °C) | +0.557 → **+0.578** | +0.115 → **+0.195** | −0.017 → **+0.090** | +0.187 |
+
+Raw member counts are over-confident after day 1 (5 similar members agree too often); calibration makes them beat
+"normal odds" at every lead. Shipped calibration refit on 2020–2021 (w_rain 0.59 → 0.03, w_heat 0.83 → 0.33 over 10 days).
+
+## Final decision: ship the selection ensemble (ens5), no damping, plus risk calibration
+
+Seasonal causality sweep (`python -m train.causality_sweep`, both official shocks on every 10th day of 2020–21,
+72 windows, null shock identical in 72/72 for all):
+
+| variant | causality mean /15 | warm_ocean propagates / stable | monsoon_stall propagates / stable |
+|---|---:|---|---|
+| **ens5 (2005–2019 members), no damping — SHIPPED** | **13.10** | 89% / 94% | 15% / 100% |
+| ens5 + damping (rain λ=1) | 12.94 | 85% / 94% | 11% / 100% |
+| all-years members (2005–2021), no damping | 12.76 | 81% / 92% | 11% / 97% |
+| all-years members + damping | 12.60 | 74% / 92% | 10% / 97% |
+
+- Damping: +0.001 pooled / +0.002 per-lead SS on 2021 (EXPERIMENTS above) vs −0.16 causality → not shipped (code kept, optional).
+- All-years retrain: forecast benefit unmeasurable (no held-out years left), −0.34 causality in this sweep → not shipped.
+  Evidence strength: one sweep each, 72 correlated windows; differences of ~0.3 may be partly noise. We chose the
+  variant whose every number is measured out of sample.
+- Consequence: **every held-out number in this log is a number of the shipped model**, and the 2021 dashboard
+  scenarios are genuinely unseen by it.
+- Shipped weights: `weights/` = ens5 members (v1, v1s1, v1s2, adv1, adv1s1) + `risk.npz` (calibration fitted on
+  2020–21 with these members). 15 tests pass; offline container: validator all pass, 0.26 s/call, 199 MB.

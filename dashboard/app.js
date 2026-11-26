@@ -3,7 +3,7 @@
 // nothing is pre-rendered. If the API is unreachable the dashboard shows a red "server offline" state.
 'use strict';
 
-const APP_TITLE = 'Multiverse of Monsoon — Climate Digital Twin';
+const APP_TITLE = 'Meghdoot — Multiverse of Monsoon Climate Twin';
 const DEFAULT_BASE = 'http://localhost:8000';
 
 // ---------------------------------------------------------------- grid & channels

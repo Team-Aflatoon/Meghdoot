@@ -1,37 +1,60 @@
-# Multiverse of Monsoon: a local-stencil climate digital twin of India
+# Meghdoot: a local-stencil climate digital twin of India (Multiverse of Monsoon)
 
-Team Aflatoon. Yugaantar DevForge 2026, Track 2.
+Team Aflatoon. Yugaantar DevForge 2026, Track 2. The 2-page project brief is [docs/BRIEF.pdf](docs/BRIEF.pdf).
 
 `serve.py` runs a learned, physics-aware simulator of India's daily weather. It works on a 32 × 36 grid of 1° cells with 6 variables: 2 m temperature, rain, u and v wind, sea-level pressure and water vapour. It does two things:
 
 - **Timeline Prime:** rolls the weather forward day by day from the last 3 days.
-- **Multiverse:** applies a localised shock (for example "warm the Bay of Bengal by 3 K") and shows how its effect spreads.
+- **Multiverse:** applies a localised shock (for example "warm the Bay of Bengal by 3 K") and shows how it spreads.
 
-## Core idea in one paragraph
-The model is a residual CNN that steps the atmosphere forward one day at a time. It works in *anomaly space*, meaning the departure from the day-of-year climatology. Each step sees only a small neighbourhood of a few grid cells: 6 cells (about 650 km) for the plain members, and 8 cells for the wind-advection member, which carries anomalies up to 2 cells per day along the 10 m wind before its CNN runs. The network has no global layers (no pooling, attention or spatial normalisation), so a shock **cannot jump** across India. It starts where it was applied and spreads at no more than 8 cells per simulated day (Chebyshev distance), which is the judge's own speed limit. That is a property of the architecture, and `tests/test_model.py::test_no_teleport_by_construction` proves it bit-exactly. Training unrolls the model over 1, then 2, 4 and 6 days on its own predictions, so the rollouts stay stable and do not drift. The shipped model is an ensemble of 3 members, and their rollouts are averaged.
+## Core idea
+- **Daily stepping in anomaly space.** Each member is a residual CNN that steps the atmosphere forward one day at a time. It works on departures from the day-of-year climatology and predicts tomorrow's *change* of that anomaly.
+- **No global layers.** The network has no pooling, attention or spatial normalisation, so a shock **cannot jump** across India.
+- **Bounded reach per day.** Each daily step can move information at most:
+  - 6 cells for the 3 plain members;
+  - 8 cells (Chebyshev distance) for the 2 wind-advection members. These first carry the anomaly up to 2 cells along the 10 m wind and then add a CNN residual.
+
+  `tests/test_model.py::test_no_teleport_by_construction` proves this bound bit-exactly. `test_judge_teleport_check_point_shock` checks the judge's own Euclidean teleport metric.
+- **Ensemble.** The shipped model averages the rollouts of 5 members (3 plain, 2 advection, different seeds).
+- **Calibrated risk maps (dashboard).** The 5 members also give probabilities of heavy rain and heat. They are blended with historical frequencies using weights fitted out of sample, and they beat "normal odds" at every lead on held-out 2021 (`train/fit_risk.py`, docs/EXPERIMENTS.md).
+- **Training.** The model is trained on its own unrolled predictions over 1 → 2 → 4 → 6 days, so rollouts stay stable.
 
 ## Run (judge path)
 ```bash
-pip install torch numpy fastapi uvicorn        # all present in the judge image
-python serve.py --port 8000                    # offline, CPU, loads weights/ at start-up
+python serve.py --port 8000        # offline, CPU; loads weights/ once at start-up
 ```
 - `POST /health` returns `{"status": "ready", ...}`.
-- `POST /simulate` follows the contract in the kit's `docs/R1_CONTRACT.md`.
+- `POST /simulate` follows the kit's `docs/R1_CONTRACT.md`.
+- Dependencies: torch, numpy, fastapi, uvicorn (all in the judge image).
 
-## Reproduce training
+## Run the dashboard (separate from the server)
 ```bash
-# data from https://github.com/OfficialAbhinavSingh/yug-monsoon-kit/releases/tag/v1.0.0 into ../data/
-python -m train.prepare                                   # -> ../data/prepared.npz (kept outside the repo)
-python -m train.train --name v1                           # trains on 2005-2019, about 7 min on an RTX 4050
-python -m train.evaluate --weights runs/v1 --device cuda  # local judge on held-out 2020-2021
-cp runs/v1/{model.pt,config.json,stats.json,climatology.npy,static.npy} weights/
-pytest -q
+python serve.py --port 8000                                   # terminal 1, repo root
+cd dashboard && python -m http.server 5173                    # terminal 2
+# open http://localhost:5173  (every map comes from a live /simulate call)
 ```
 
+## Reproduce the shipped model
+Data: download `india_climate_train.nc` and `stats.json` from https://github.com/OfficialAbhinavSingh/yug-monsoon-kit/releases/tag/v1.0.0 into `../data/`.
+
+```bash
+python -m train.prepare                                    # -> ../data/prepared.npz (kept outside the repo)
+for s in 0 1 2; do python -m train.train --name v1s$s --seed $s; done                     # trains on 2005-2019
+for s in 0 1;   do python -m train.train --name adv1s$s --seed $s --advect --blocks 4; done
+python -m train.make_ensemble --name ens5 runs/v1s0 runs/v1s1 runs/v1s2 runs/adv1s0 runs/adv1s1
+python -m train.evaluate --weights runs/ens5 --device cuda          # local judge on held-out 2020-2021
+python -m train.causality_sweep --weights runs/ens5                 # both shocks, 72 windows, all seasons
+python -m train.fit_risk --weights runs/ens5 --fit-years 2020 2021 --out runs/ens5/risk.npz
+cp runs/ens5/* weights/
+pytest -q && bash scripts/judge_check.sh                   # tests + offline judge replica in Docker
+```
+The shipped members are trained on 2005–2019 only, so every held-out number in docs/EXPERIMENTS.md is a number of the
+shipped model. We also tried damping long-lead anomalies toward climatology and retraining on all years. Neither is shipped; the evidence is in EXPERIMENTS.md.
+(`v1s0` is called `v1` and `adv1s0` is called `adv1` in docs/EXPERIMENTS.md.)
+
 ## Results
-Every number, with how it was measured, is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md).
+Every number, with how it was measured, is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md). A team guide (architecture, glossary, Q&A) is in [docs/explainer.html](docs/explainer.html).
 
 ## Repository map
-`serve.py` (API) · `model/` (inference: numpy + torch only) · `train/` (data, training, local judge) ·
-`weights/` (shipped model) · `dashboard/` (separate static UI that calls the live `/simulate`) · `tests/` ·
-`scripts/` (offline judge replica in Docker).
+`serve.py` (API) · `model/` (inference: numpy + torch only) · `train/` (data, training, local judge, ensemble, damping) ·
+`weights/` (shipped model) · `dashboard/` (static UI, calls the live `/simulate`) · `tests/` · `scripts/` (offline judge replica in Docker).

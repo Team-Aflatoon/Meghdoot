@@ -57,6 +57,25 @@ async def simulate(request: Request):
     return {"rollout": out.tolist(), "inference_ms": (time.perf_counter() - t0) * 1000.0}
 
 
+@app.post("/risk")
+async def risk(request: Request):
+    """Dashboard only (not part of the judged contract): calibrated ensemble probabilities of heavy rain
+    (> 10 mm/day) and heat (daily-mean t2m >= 34 C) per day and cell."""
+    t0 = time.perf_counter()
+    try:
+        body = await request.json()
+        init = _arr(body["init_states"], (3, 6, 32, 36))
+        pert = None if body.get("perturbation") is None else _arr(body["perturbation"], (6, 32, 36))
+        steps = int(body.get("steps", 10))
+        if not 1 <= steps <= MAX_STEPS:
+            raise ValueError(f"steps must be 1..{MAX_STEPS}")
+        r = SIM.risk(init, body["doy_sincos"], steps, pert)
+    except (KeyError, ValueError, TypeError, OverflowError) as e:
+        return JSONResponse({"error": str(e)}, status_code=422)
+    return {"p_rain": np.round(r["p_rain"], 3).tolist(), "p_heat": np.round(r["p_heat"], 3).tolist(),
+            "members": len(SIM.nets), "inference_ms": (time.perf_counter() - t0) * 1000.0}
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8000)

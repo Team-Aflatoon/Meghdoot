@@ -52,3 +52,16 @@ def test_overflow_steps_is_422(client):
     body = json.dumps({"init_states": init, "doy_sincos": [0, 1], "steps": 1}).replace('"steps": 1', '"steps": Infinity')
     r = client.post("/simulate", content=body, headers={"Content-Type": "application/json"})
     assert r.status_code == 422
+
+
+def test_risk_endpoint_probabilities(client):
+    import serve
+    if not (serve.SIM.weights_dir / "risk.npz").exists():
+        pytest.skip("no risk calibration shipped")
+    clim = serve.SIM.clim.numpy()
+    init = np.stack([clim[180], clim[181], clim[182]]).tolist()
+    r = client.post("/risk", json={"init_states": init, "doy_sincos": [0.0, -1.0], "steps": 10, "perturbation": None})
+    assert r.status_code == 200
+    for k in ("p_rain", "p_heat"):
+        p = np.array(r.json()[k])
+        assert p.shape == (10, 32, 36) and p.min() >= 0 and p.max() <= 1

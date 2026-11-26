@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Multiverse of Monsoon: team explainer (Team Aflatoon, Track 2)</title>
+<title>Meghdoot: team explainer (Team Aflatoon, Track 2)</title>
 <style>
   :root {
     --ink: #1d2430; --muted: #5b6676; --line: #d9dee6; --bg: #ffffff; --soft: #f5f7fa;
@@ -107,8 +107,11 @@
 
 <main>
 <header class="title">
-  <h1>Multiverse of Monsoon: how our climate digital twin works</h1>
+  <h1>Meghdoot: how our climate digital twin works</h1>
   <p>Team Aflatoon · Yugaantar DevForge 2026, Track 2 · internal explainer for the desk review</p>
+  <p><b>Meghdoot</b> (the "Multiverse of Monsoon" digital twin) is named after Kalidasa's <i>Meghad&#363;ta</i>, in which a monsoon cloud
+    carries a message across India. Our model does something similar: a change made in one place is carried onward at a bounded speed.
+    Repo: <code>github.com/Team-Aflatoon/Meghdoot</code> · one-page brief: <code>docs/BRIEF.pdf</code> · all experiment numbers: <code>docs/EXPERIMENTS.md</code>.</p>
   <p>Read it top to bottom once. Then use the <a href="#qa">Q&amp;A drill</a> to rehearse. Every number lives in the
     <a href="#results">Results</a> section; elsewhere numbers are pulled from there and look like this: <span class="r">0.000</span>.
     If a number changes, edit only the Results table.</p>
@@ -123,8 +126,9 @@
 <p>"We built a fast, offline climate digital twin of India: a small neural network that steps the weather forward one day at a time
 on the official 32 × 36 grid. What makes it different: each daily step can only see a few neighbouring cells, so a shock
 <b>cannot teleport</b>. It starts where you apply it and spreads at a bounded speed. That is a property of the architecture,
-and we have a bit-exact test for it. A zero shock gives exactly the same output. On held-out years 2020–2021, scored with the
-kit's own scoring code, it beats the better of persistence and climatology (dense skill <span class="r" data-r="ens3_dense_ss"></span>
+and we have a bit-exact test for it. A zero shock gives exactly the same output. In held-out evaluation on 2020–2021 (model
+selection never saw those years), scored with the kit's own scoring code, a 5-member ensemble beats the better of persistence and
+climatology (dense skill <span class="r" data-r="ens5_dense_ss"></span>
 over 144 windows)."</p>
 </div>
 
@@ -134,14 +138,16 @@ over 144 windows)."</p>
     Change the starting state in one region, it shows the alternate future (the Multiverse) and how the change spreads.</li>
   <li><b>How.</b> A residual CNN ("StencilNet") that works in <i>anomaly</i> space (departure from the normal weather for that day of
     the year) and predicts only tomorrow's <i>change</i>. Rain is never negative and temperature is clamped to valid values after every step.
-    Three trained networks are averaged (the "ens3" ensemble).</li>
+    Five trained networks are averaged (the "ens5" ensemble), and a small, honest post-processing step shrinks over-confident long-range
+    anomalies back towards the normal weather (<a href="#g-damp">anomaly damping</a>; rain is left alone).</li>
   <li><b>USP.</b> Causality by construction. The network has only 3×3 and 1×1 convolutions: no pooling, no attention, no global layers.
-    So information moves at most a fixed number of cells per simulated day (6 for two members, 8 for the advection member). The judge
+    So information moves at most a fixed number of cells per simulated day (6 for the three plain members, 8 for the two advection members). The judge
     calls anything faster than 8 cells/day "teleportation". Our test <code>test_no_teleport_by_construction</code> checks that cells beyond
     that reach are <i>bit-for-bit</i> unchanged.</li>
-  <li><b>Proof.</b> Held-out 2020–2021, the kit's own <code>scoring.py</code>: dense mean skill <span class="r" data-r="ens3_dense_ss"></span>
-    (persistence: <span class="r" data-r="b0_dense_ss"></span>), heavy-rain CSI skill <span class="r" data-r="ens3_csi_dense"></span> (dense),
-    causality <span class="r" data-r="ens3_caus"></span>/15 on average, stable on <span class="r" data-r="ens3_stable"></span> shocks.
+  <li><b>Proof.</b> Held-out 2020–2021 (selection ensemble), the kit's own <code>scoring.py</code>: dense mean skill <span class="r" data-r="ens5_dense_ss"></span>
+    (persistence: <span class="r" data-r="b0_dense_ss"></span>), heavy-rain CSI skill <span class="r" data-r="ens5_csi_dense"></span> (dense),
+    causality <span class="r" data-r="ens5_caus"></span>/15 in all 6 named windows. The members used for this evidence were trained on 2005–2019;
+    the shipped weights are the same recipes retrained on all years, so 2020–21 is in-sample for them (see <a href="#results">Results</a>).
     Runs offline in the judge's container in <span class="r" data-r="latency"></span> per 10-day call.</li>
   <li><b>Impact.</b> A "Heat and Kharif water-stress co-pilot" in the dashboard turns Prime vs Multiverse into per-region heat-stress days,
     rain change, dry days and a one-line advisory.</li>
@@ -234,6 +240,16 @@ produces a counterfactual forecast.</p>
 <tr><td>Repo scan</td><td class="num">15</td><td>8 anti-cheat + 7 code health (training pipeline 3, server separate from UI 2, frontend 1, README 0.5, weights 0.5). See <a href="#rules">section 11</a>.</td></tr>
 <tr><td>Brief</td><td class="num">15</td><td>Read and scored by a person.</td></tr>
 </tbody></table>
+
+<h3 id="skill-avg">How is skill averaged? (the contract does not say)</h3>
+<div class="box warn">
+<p><b>Honest ambiguity.</b> <code>docs/R1_CONTRACT.md</code> does not say whether the judge pools leads 1, 4 and 8 into one RMSE per channel, or computes SS
+per lead and then averages. Our local judge pools (as the kit's <code>rmse_lat</code> does over leading dimensions). An independent review flagged the
+alternative, which is harsher because day 8 only matches climatology. Under pooling we expect about <span class="r" data-r="pooled_pts"></span> of 30; under
+per-lead-then-mean, skill is about <span class="r" data-r="alt_ss"></span>, roughly <span class="r" data-r="alt_pts"></span> of 30. Per-lead skill:
+<span class="r" data-r="lead1"></span> (day 1), <span class="r" data-r="lead4"></span> (day 4), <span class="r" data-r="lead8"></span> (day 8). Details in
+<a href="#results">Results</a>. <code>train/evaluate.py</code> prints both readings ("alt aggregation").</p>
+</div>
 
 <h3>The causality checks, exactly</h3>
 <p>The judge computes the response <code>Δ = shocked rollout − base rollout</code>. "Energy" per cell per day = sum over channels of
@@ -376,22 +392,22 @@ physically?", questions on the impact logic and on limits. Code freeze: Fri 27 N
 
   <!-- ensemble -->
   <rect class="bx2" x="620" y="550" width="360" height="56" rx="8"/>
-  <text class="t" x="634" y="574">Ensemble mean of 3 members (ens3)</text>
-  <text class="s" x="634" y="594">v1 + v1s1 (5 blocks) + adv1 (advection, 4 blocks)</text>
+  <text class="t" x="634" y="574">Ensemble mean of 5 members (ens5)</text>
+  <text class="s" x="634" y="594">3 plain (5 blocks) + 2 advection (4 blocks)</text>
   <path class="ln" d="M500,530 V578 H618"/>
   <text class="s" x="20" y="580">Each member runs its own full rollout;</text>
-  <text class="s" x="20" y="598">the 3 rollouts are averaged, then a final NaN / range guard.</text>
+  <text class="s" x="20" y="598">the 5 rollouts are averaged, then lead damping (not rain) and a NaN / range guard.</text>
 </svg>
 <p class="caption">Figure 1. One daily step of one member, the loop, and the ensemble. Source: <code>model/net.py</code>, <code>model/simulator.py</code>.</p>
 
 <h3 id="arch-steps">The steps</h3>
 <ol>
   <li><b>Inputs.</b> 3 days × 6 channels × 32 × 36 in physical units, plus <code>doy_sincos</code> of the last day. If a perturbation is sent, it is
-    added to the last input day first (<code>model/simulator.py</code>). NaN/Inf inputs are replaced by 0 as a safety net.</li>
+    added to the last input day first (<code>model/simulator.py</code>). NaN/Inf input cells (which the contract forbids) are filled from that day's climatology as a safety net.</li>
   <li><b>Day of year.</b> <code>doy_index_from_sincos</code> turns [sin, cos] back into a slot 0–364 with <code>atan2</code>. Training uses the
     same function, so the slot is identical in training and serving. No date ever enters the server.</li>
   <li><b>Anomaly normalisation.</b> For each input day: <code>anomaly = (x − climatology[slot]) / std</code>. The climatology is a 365-day array
-    (<code>weights/climatology.npy</code>, shape 365 × 6 × 32 × 36), the mean of each calendar day over the <b>training years only</b>, smoothed with a 15-day
+    (<code>weights/climatology.npy</code>, shape 365 × 6 × 32 × 36), the mean of each calendar day over the <b>training years of that weight set only</b> (2005–2019 for the selection ensemble), smoothed with a 15-day
     circular running mean (<code>train/prepare.py</code>). <code>std</code> comes from <code>stats.json</code>.</li>
   <li><b>Features</b> (<code>step_features</code>, 29 channels): the 3 anomalies (18), the normalised climatology of the <i>target</i> day (6), land-sea
     mask and orography in km (2), sin/cos of the target day (2), and latitude as <code>(lat − 22)/10</code> (1).</li>
@@ -403,8 +419,11 @@ physically?", questions on the impact logic and on limits. Code freeze: Fri 27 N
     anomaly on top of the normal weather for tomorrow", never a runaway.</li>
   <li><b>Physical gate.</b> Rain through ReLU (≥ 0), t2m clamped to 234.15–332.15 K. The <i>gated</i> state is what the next step sees.</li>
   <li><b>Autoregressive loop.</b> The new day is appended; the oldest drops off. Repeat for N days (server allows 1–30).</li>
-  <li><b>Ensemble.</b> The 3 members each do a full rollout and the rollouts are averaged. A final guard replaces any non-finite value with that day's
-    climatology and clamps t2m and rain again.</li>
+  <li><b>Ensemble.</b> The 5 members each do a full rollout and the rollouts are averaged.</li>
+  <li><b>Lead-dependent anomaly damping.</b> For forecast day k and channel c: <code>out_k = clim_k + λ[k,c] · (out_k − clim_k)</code>, with λ in [0, 1] fitted
+    by least squares out of sample (<code>train/fit_damping.py</code>, optional file <code>weights/damping.npy</code>). Rain has λ = 1 (not damped). Leads beyond the fitted range reuse the last row.
+    See <a href="#g-damp">the glossary</a> and the design card in section 5.</li>
+  <li><b>Final guard.</b> Any non-finite value falls back to that day's climatology, then t2m and rain are clamped again.</li>
 </ol>
 
 <h3>Reach per step (why it cannot teleport)</h3>
@@ -412,9 +431,9 @@ physically?", questions on the impact logic and on limits. Code freeze: Fri 27 N
 <table>
 <thead><tr><th>Member</th><th>Stem</th><th>Blocks</th><th>Advection</th><th class="num">Reach per day (cells)</th></tr></thead>
 <tbody>
-<tr><td>v1, v1s1</td><td>1</td><td>5 × 1</td><td>none</td><td class="num">6 (about 650 km)</td></tr>
-<tr><td>adv1</td><td>1</td><td>4 × 1</td><td>2 (cap) + 1 (bilinear neighbour)</td><td class="num">8</td></tr>
-<tr><td>ens3 (max)</td><td colspan="3">ensemble reach = max over members (<code>Simulator.radius</code>)</td><td class="num">8</td></tr>
+<tr><td>v1, v1s1, v1s2 (plain)</td><td>1</td><td>5 × 1</td><td>none</td><td class="num">6 (about 650 km)</td></tr>
+<tr><td>adv1, adv1s1 (advection)</td><td>1</td><td>4 × 1</td><td>2 (cap) + 1 (bilinear neighbour)</td><td class="num">8</td></tr>
+<tr><td>ens5 (max)</td><td colspan="3">ensemble reach = max over members (<code>Simulator.radius</code>)</td><td class="num">8</td></tr>
 </tbody></table>
 <svg class="diagram" viewBox="0 0 640 230" role="img" aria-label="Receptive field growth" style="max-width:640px">
   <style>.c{fill:#fff;stroke:#d9dee6}.c1{fill:#1f5fa8}.c2{fill:#8fb3de}.c3{fill:#d3e2f4}.tt{font:12px "Segoe UI",sans-serif;fill:#1d2430}</style>
@@ -441,7 +460,7 @@ physically?", questions on the impact logic and on limits. Code freeze: Fri 27 N
 </svg>
 <p class="caption">Figure 2. The influence of one cell grows as a square (one ring per 3×3 conv). Everything outside the square is untouched, exactly.</p>
 
-<h3 id="arch-adv">The optional semi-Lagrangian advection member (adv1)</h3>
+<h3 id="arch-adv">The semi-Lagrangian advection members (adv1, adv1s1)</h3>
 <p class="plain">Weather patterns get blown along by the wind. Instead of making the CNN learn "move things downwind" from scratch, this
 member first physically shifts today's anomaly field along the wind, then the CNN corrects what is left.</p>
 <p class="tech">For each cell, the displacement in cells per day is <code>dx = α · u10 · (86400 / 111 000) / cos(lat)</code>,
@@ -455,19 +474,19 @@ member first physically shifts today's anomaly field along the wind, then the CN
   <li><b>Why the tanh cap:</b> a speed limit, like a CFL condition. Without it a strong wind could move a signal arbitrarily far in one step and break the reach guarantee.</li>
   <li><b>Why 4 blocks, not 5:</b> reach = 2 (cap) + 1 (bilinear reads the next cell) + 1 (stem) + 4 (blocks) = <b>8</b>, exactly the judge's 8 cells/day.
     With 5 blocks it would be 9. <code>tests/test_model.py::test_reach_within_judge_speed_limit</code> asserts reach ≤ 8.</li>
-  <li><b>Honest evidence:</b> on its own, adv1 was "no clear win" (it bundled two changes, 1 run). It earns its place by adding <i>diversity</i> to the ensemble; see <a href="#results">Results</a>.</li>
+  <li><b>Honest evidence:</b> on its own, adv1 was "no clear win" (it bundled two changes, 1 run), and its twin adv1s1 sits in the same range as the plain members. They earn their place by adding <i>diversity</i> to the ensemble; see <a href="#results">Results</a>.</li>
 </ul>
 
 <h3 id="arch-train">Training recipe (<code>train/train.py</code>)</h3>
 <table>
 <tbody>
-<tr><th>Data split</th><td>Train on 2005–2019 (<code>--val-start 2020</code>); 2020–2021 held out. Training targets never cross into held-out years. The climatology is built from training years only. All three shipped members use this split.</td></tr>
+<tr><th>Data split</th><td><b>Two stages.</b> (1) Model selection: members trained on 2005–2019 (<code>--val-start 2020</code>), 2020–2021 held out; this "selection ensemble" produces all the held-out evidence. (2) Shipped: the <b>same 5 recipes retrained on all years 2005–2021</b> (<code>--val-start 2099</code>), so 2020–21 and the dashboard scenarios are <b>in-sample</b> for the shipped weights. The damping factors λ were fitted with the selection members, out of sample.</td></tr>
 <tr><th>Loss</th><td>Squared error in std units (each channel divided by its std), latitude-weighted (cos lat, mean 1), averaged over every unrolled day.
   Rain cells where the <i>true</i> rain &gt; 10 mm/day get weight <code>1 + rain_weight = 1 + 3 = 4</code>.</td></tr>
 <tr><th>Unrolled curriculum</th><td><code>1:12, 2:6, 4:6, 6:6</code>: 12 epochs predicting 1 day, then 6 epochs each rolling out 2, 4 and 6 days on its <i>own</i> predictions, with gradients through the whole rollout. 30 epochs total.</td></tr>
 <tr><th>Optimiser</th><td>AdamW, lr 1e-3, weight decay 1e-4, batch 32; cosine learning-rate decay over all 30 epochs; gradient-norm clipping at 1.0.</td></tr>
 <tr><th>Size and time</th><td>Width 96. About 7 minutes per run on an RTX 4050 (README).</td></tr>
-<tr><th>Members</th><td>v1 (seed 0), v1s1 (same recipe, seed 1), adv1 (advection, 4 blocks, seed 0). Bundled by <code>train/make_ensemble.py</code>, which checks all members share the same climatology.</td></tr>
+<tr><th>Members</th><td>3 plain: v1 (seed 0), v1s1 (seed 1), v1s2 (seed 2); 2 advection (4 blocks): adv1 (seed 0), adv1s1 (seed 1). Bundled by <code>train/make_ensemble.py</code>, which checks all members share the same climatology.</td></tr>
 </tbody></table>
 </section>
 
@@ -480,12 +499,12 @@ member first physically shifts today's anomaly field along the wind, then the CN
 <div class="card"><h4>No drift over long rollouts</h4><dl>
   <dt>Problem</dt><dd>Small errors compound when a model feeds on its own output; forecasts wander off or explode.</dd>
   <dt>Fix</dt><dd>(1) Predict the <i>change</i> of the anomaly, not the full state. (2) Work relative to climatology, so "no information" means "normal weather for that day". (3) Train on unrolled rollouts of 1 → 2 → 4 → 6 days, so the model is penalised for its own compounding errors. (4) Physical gate every step.</dd>
-  <dt>Evidence</dt><dd><code>test_extreme_inputs_stay_valid</code>: +25 K heat, ×20 rain and ×5 wind for 30 days stays finite and valid. Stable on all ens3 shocks (<a href="#results">Results</a>).</dd></dl></div>
+  <dt>Evidence</dt><dd><code>test_extreme_inputs_stay_valid</code>: +25 K heat, ×20 rain and ×5 wind for 30 days stays finite and valid. Causality scored 13.12/15 in all 6 named ens5 windows, and the earlier ens3 was stable on all 12 shocks (<a href="#results">Results</a>).</dd></dl></div>
 
 <div class="card"><h4>No blur</h4><dl>
   <dt>Problem</dt><dd>Models trained on squared error tend to forecast a smooth average field, which loses detail at day 8.</dd>
   <dt>Fix</dt><dd>Anomaly + residual design keeps today's structure as the starting point; we measure the kit's day-8 variance ratio for every model.</dd>
-  <dt>Evidence</dt><dd>Anti-blur scored full marks on our local judge (derivation in <a href="#results">Results</a>). Note: the original plan included a variance loss term; we did not need it and it is not in the code.</dd></dl></div>
+  <dt>Evidence</dt><dd>Anti-blur scored 10/10 on the 144-window mean on our local judge (derivation in <a href="#results">Results</a>). <b>Caveat:</b> on a single random draw of 5 windows there is about a <span class="r" data-r="blur_chance"></span> chance of scoring 8.33 instead of 10, because rain on a dry day can push the day-8 variance ratio past 2.5 (expected score about <span class="r" data-r="blur_exp"></span>). Note: the original plan included a variance loss term; we did not need it and it is not in the code.</dd></dl></div>
 
 <div class="card"><h4>No teleport, by construction</h4><dl>
   <dt>Problem</dt><dd>The judge penalises a response far from the shock (faster than 8 cells/day).</dd>
@@ -507,17 +526,30 @@ member first physically shifts today's anomaly field along the wind, then the CN
   <dt>Fix</dt><dd>Cells with true rain &gt; 10 mm/day (the CSI threshold) get 4× loss weight (1 + 3).</dd>
   <dt>Evidence</dt><dd>Positive CSI skill on both window sets (<a href="#results">Results</a>). We did not run an ablation without the weight; say so if asked.</dd></dl></div>
 
-<div class="card"><h4>Ensemble of 3</h4><dl>
+<div class="card"><h4>Ensemble of 5</h4><dl>
   <dt>Problem</dt><dd>A single model's errors include random, seed-dependent parts, and occasional rain spikes blew the 5-std stability limit.</dd>
-  <dt>Fix</dt><dd>Average 3 independently trained members, one of them structurally different (advection).</dd>
+  <dt>Fix</dt><dd>Average 5 independently trained members: 3 plain (different seeds) and 2 structurally different (wind advection, different seeds).</dd>
   <dt>Why it helps</dt><dd>RMSE punishes big errors. Members make partly independent errors, and averaging cancels some of them, so the mean is closer to the truth on average. It also averages out a spike that only one member produces.</dd>
-  <dt>Evidence</dt><dd>ens2 beat its best member, ens3 beat ens2, and stability went from failing some shocks (v1) to stable on all (<a href="#results">Results</a>). Averaging is deterministic, so the null shock is still exact. The anti-blur check still passes with the average.</dd></dl></div>
+  <dt>Evidence</dt><dd>ens2 beat its best member, ens3 beat ens2, and ens5 beat ens3 on dense skill; stability went from failing some shocks (v1) to stable on all ens3 shocks (<a href="#results">Results</a>). Averaging is deterministic, so the null shock is still exact. The anti-blur check still passes with the average.</dd></dl></div>
+
+<div class="card"><h4>Anomaly damping (post-processing)</h4><dl>
+  <dt>Problem</dt><dd>At long leads the network's anomalies are over-confident: it says "+2 std" where the truth is, on average, closer to "+1 std". That inflates RMSE at day 8, and day 8 is where we are weakest.</dd>
+  <dt>Fix</dt><dd><code>out_k = clim_k + λ[k,c] · (out_k − clim_k)</code>: shrink each forecast anomaly towards the normal weather by a factor λ in [0, 1] that depends on the lead day k and the channel c. λ is fitted by least squares on years the members did not train on. Day 1 stays at 1.0 (untouched); longer leads shrink more. <b>Rain is not damped</b> (λ = 1): damping rain cost heavy-rain CSI and made the heavy-rain shock stop propagating.</dd>
+  <dt>Evidence</dt><dd>Fit on 2020, score on 2021 only (71 dense windows; out of sample for both members and λ):
+    <table>
+    <thead><tr><th>variant</th><th class="num">pooled SS</th><th class="num">per-lead SS</th><th class="num">CSI skill</th><th>decision</th></tr></thead>
+    <tbody>
+    <tr><td>no damping</td><td class="num">+0.120</td><td class="num">+0.064</td><td class="num">+0.100</td><td>baseline</td></tr>
+    <tr><td>damp all channels</td><td class="num">+0.134</td><td class="num">+0.080 (quick test)</td><td class="num">+0.090</td><td>rejected: CSI −1.6 pts, heavy-rain shock stops propagating</td></tr>
+    <tr><td><b>damp all except rain</b></td><td class="num"><b>+0.121</b></td><td class="num"><b>+0.066</b></td><td class="num"><b>+0.100</b></td><td><b>adopted</b>: never worse under either reading</td></tr>
+    </tbody></table>
+    Honest size of the effect: tiny under pooling (+0.001), small under per-lead averaging (+0.002). It is a safety measure, not a headline gain. The same table, with the shipped λ values, is in <a href="#results">Results</a>.</dd></dl></div>
 
 <div class="card"><h4>Honest validation</h4><dl>
   <dt>Problem</dt><dd>Scoring on training years, or with our own re-implementation of the rules, would flatter us.</dd>
-  <dt>Fix</dt><dd>Train 2005–2019, test on held-out 2020–2021. <code>train/evaluate.py</code> imports the kit's <i>own</i> functions (<code>rmse_lat</code>, <code>skill_vs_best_ref</code>, <code>csi</code>, <code>csi_skill</code>, <code>forecast_points</code>, <code>variance_ratio</code>, <code>anti_blur_points</code>, <code>make_shock</code>, <code>causality_checks</code>, <code>causality_points</code>, <code>null_consistent</code>, <code>validity</code>). Climatology reference = the kit's climatology over training years.</dd>
+  <dt>Fix</dt><dd>Model selection: train members on 2005–2019, test on held-out 2020–2021. Then retrain the same recipes on all years for shipping (no new choices are made on the retrained weights). <b>So the shipped weights have seen 2020–21; the held-out evidence comes from the selection ensemble.</b> <code>train/evaluate.py</code> imports the kit's <i>own</i> functions (<code>rmse_lat</code>, <code>skill_vs_best_ref</code>, <code>csi</code>, <code>csi_skill</code>, <code>forecast_points</code>, <code>variance_ratio</code>, <code>anti_blur_points</code>, <code>make_shock</code>, <code>causality_checks</code>, <code>causality_points</code>, <code>null_consistent</code>, <code>validity</code>). Climatology reference = the kit's climatology over training years.</dd>
   <dt>Two window sets</dt><dd><b>named</b> = 10 windows (5 per year) matching the hidden case types: winter western disturbance 25 Jan, heatwave 15 May, onset 5 Jun, heavy rain 20 Jul, cyclone 20 Oct. <b>dense</b> = every 5th day of 2020–2021 = 144 windows. Dense is more trustworthy: 144 samples instead of 10, so one lucky or unlucky window barely moves the mean (seed-to-seed spread on named alone was about ±0.02 SS).</dd>
-  <dt>Assumptions</dt><dd>We assume the judge's per-window SS is the mean over channels of SS on leads 1/4/8 stacked. Causality is checked on the named heavy-rain, onset and cyclone windows (6 windows × 2 shocks = 12 shocks).</dd></dl></div>
+  <dt>Assumptions</dt><dd>We assume the judge's per-window SS is the mean over channels of SS on leads 1/4/8 stacked. Causality is checked on the named heavy-rain, onset and cyclone windows (6 windows × 2 shocks = 12 shocks), and separately over 72 windows across all seasons (independent review). The skill averaging across leads is itself an assumption: see <a href="#skill-avg">How is skill averaged?</a></dd></dl></div>
 </div>
 </section>
 
@@ -525,33 +557,74 @@ member first physically shifts today's anomaly field along the wind, then the CN
 <section id="results" class="results">
 <h2>6. Results (all numbers live here)</h2>
 <div class="box warn"><p><b>Single source.</b> Every number here is copied from <code>docs/EXPERIMENTS.md</code> (local judge = kit's own scoring functions,
-held-out 2020–2021). If EXPERIMENTS.md changes, update only the cells in this section; the rest of the page reads them from here.
+held-out 2020–2021 for the selection ensemble). If EXPERIMENTS.md changes, update only the cells in this section; the rest of the page reads them from here.
 Points are of 70 (skill 45 + anti-blur 10 + causality 15). Evidence strength: 1 run each unless stated.</p></div>
 
-<h3>Headline: the promoted model ens3 (mean of v1, v1s1, adv1)</h3>
+<h3>Headline: the shipped design ens5 (mean of v1, v1s1, v1s2, adv1, adv1s1; selection members trained on 2005–2019)</h3>
+<p class="caption">All values below come from the selection ensemble on held-out 2020–2021. The shipped weights are the same 5 recipes retrained on all years 2005–2021, so there is no held-out score for them; this table is the evidence.</p>
 <table>
 <thead><tr><th>Metric</th><th>Window set</th><th class="num">Value</th></tr></thead>
 <tbody>
-<tr><td>Mean RMSE skill score (vs better of persistence/climatology)</td><td>dense, 144 windows</td><td class="num" id="R-ens3_dense_ss">+0.106</td></tr>
-<tr><td>Mean RMSE skill score</td><td>named, 10 windows</td><td class="num" id="R-ens3_named_ss">+0.151</td></tr>
-<tr><td>Heavy-rain CSI skill</td><td>dense, 144 windows</td><td class="num" id="R-ens3_csi_dense">+0.090</td></tr>
-<tr><td>Heavy-rain CSI skill</td><td>named, 10 windows</td><td class="num" id="R-ens3_csi_named">+0.145</td></tr>
-<tr><td>Causality points (of 15), average</td><td>6 named windows × 2 shocks</td><td class="num" id="R-ens3_caus">13.44</td></tr>
-<tr><td>Shocks that stayed stable (&lt; 5 std)</td><td>same 12 shocks</td><td class="num" id="R-ens3_stable">12/12</td></tr>
-<tr><td>monsoon_stall shocks that fail "propagates"</td><td>6 stall shocks</td><td class="num" id="R-ens3_stall">5/6</td></tr>
-<tr><td>Auto points (of 70)</td><td>named, 10 windows</td><td class="num" id="R-ens3_named_pts">68.44</td></tr>
-<tr><td>Latency per 10-step call (judge-like container: offline, 4 CPU, 6 GB, read-only)</td><td>container check</td><td class="num" id="R-latency">0.18–0.21 s</td></tr>
-<tr><td>Time to ready / memory</td><td>container check</td><td class="num"><span id="R-ready">5 s</span> / <span id="R-ram">196 MB</span></td></tr>
+<tr><td>Mean RMSE skill score (vs better of persistence/climatology)</td><td>dense, 144 windows</td><td class="num" id="R-ens5_dense_ss">+0.113</td></tr>
+<tr><td>Mean RMSE skill score</td><td>named, 10 windows</td><td class="num" id="R-ens5_named_ss">+0.163</td></tr>
+<tr><td>Heavy-rain CSI skill</td><td>dense, 144 windows</td><td class="num" id="R-ens5_csi_dense">+0.095</td></tr>
+<tr><td>Heavy-rain CSI skill</td><td>named, 10 windows</td><td class="num" id="R-ens5_csi_named">+0.147</td></tr>
+<tr><td>Anti-blur points (of 10)</td><td>dense, 144-window mean</td><td class="num" id="R-ens5_blur">10/10</td></tr>
+<tr><td>Causality points (of 15)</td><td>6 named windows, same value in all 6</td><td class="num" id="R-ens5_caus">13.12</td></tr>
+<tr><td>Gate: mean SS vs persistence at day 4</td><td>dense, 144 windows</td><td class="num" id="R-gate_dense">+0.231</td></tr>
+<tr><td>Auto points (of 70)</td><td>named, 10 windows</td><td class="num" id="R-ens5_named_pts">68.12</td></tr>
+<tr><td>Auto points (of 70), from the pieces below</td><td>dense, 144 windows</td><td class="num" id="R-dense_total">65.5</td></tr>
+<tr><td>Latency per 10-step call (judge-like container: offline, 4 CPU, 6 GB, read-only)</td><td>container check, 5 members</td><td class="num" id="R-latency">0.34–0.48 s</td></tr>
+<tr><td>Time to ready / memory</td><td>container check</td><td class="num"><span id="R-ready">6 s</span> / <span id="R-ram">201 MB</span></td></tr>
 </tbody></table>
 
-<h3>Derived from the formulas (arithmetic on the numbers above, not separately logged)</h3>
+<h3>Derived from the formulas (arithmetic on the numbers above; the dense point values are as logged)</h3>
 <ul>
-  <li>Named: 0.151 ≥ 0.12 → RMSE 30/30; CSI 0.145 ≥ 0.10 → 15/15; 68.44 − 30 − 15 − 13.44 = 10 → anti-blur 10/10.</li>
-  <li>Dense (the more realistic estimate): RMSE 30 × 0.106 / 0.12 ≈ <span id="R-dense_rmse_pts">26.5</span>/30; CSI 15 × 0.090 / 0.10 ≈ <span id="R-dense_csi_pts">13.5</span>/15.</li>
-  <li>Ensemble gain over the best single member on dense SS: ens2 vs v1 = <span id="R-ens2_gain">+0.025</span> (logged); ens3 vs v1 = 0.106 − 0.076 = <span id="R-ens3_gain">+0.030</span> (computed).</li>
+  <li>Named: 0.163 ≥ 0.12 → RMSE 30/30; 0.147 ≥ 0.10 → CSI 15/15; 68.12 − 30 − 15 − 13.12 = 10 → anti-blur 10/10; total about 68.1/70.</li>
+  <li>Dense (the more realistic estimate, pooled leads): RMSE about <span id="R-dense_rmse_pts">28.1</span>/30; CSI about <span id="R-dense_csi_pts">14.3</span>/15; anti-blur 10/10; causality 13.1/15; total about 65.5/70.</li>
+  <li>Ensemble gain over the best single member on dense SS: ens2 vs v1 = <span id="R-ens2_gain">+0.025</span> (logged); ens3 vs v1 = 0.106 − 0.076 = +0.030 (computed); ens5 vs v1 = <span id="R-ens5_gain">+0.037</span> (0.113 − 0.076, computed).</li>
 </ul>
 
-<h3>All runs (from the experiment log)</h3>
+<h3 id="res-avg">How is skill averaged? Two readings of the contract</h3>
+<p>The contract does not say whether leads 1/4/8 are pooled into one RMSE per channel or scored per lead and then averaged. Both are in <code>train/evaluate.py</code> ("alt aggregation").</p>
+<table>
+<thead><tr><th>Reading</th><th class="num">Mean SS (dense)</th><th class="num">RMSE points (of 30)</th></tr></thead>
+<tbody>
+<tr><td>Pooled leads (our local judge's default)</td><td class="num">+0.113</td><td class="num"><span id="R-pooled_pts">≈ 28/30</span></td></tr>
+<tr><td>Per lead, then mean</td><td class="num"><span id="R-alt_ss">≈ +0.06</span></td><td class="num"><span id="R-alt_pts">≈ 15/30</span></td></tr>
+</tbody></table>
+<table>
+<thead><tr><th>Lead (dense 144, ens5)</th><th class="num">SS vs best reference</th></tr></thead>
+<tbody>
+<tr><td>Day 1</td><td class="num" id="R-lead1">+0.217</td></tr>
+<tr><td>Day 4</td><td class="num" id="R-lead4">+0.024</td></tr>
+<tr><td>Day 8</td><td class="num" id="R-lead8">−0.067</td></tr>
+</tbody></table>
+<p class="caption">Day 8 is slightly worse than the best reference (climatology), which is why the per-lead reading is harsher.</p>
+
+<h3>Anomaly damping, out of sample (fit on 2020, scored on 2021 only, 71 dense windows)</h3>
+<table>
+<thead><tr><th>variant</th><th class="num">pooled SS</th><th class="num">per-lead SS</th><th class="num">CSI skill</th><th>causality (3 windows)</th><th>decision</th></tr></thead>
+<tbody>
+<tr><td>ens5, no damping</td><td class="num">+0.120</td><td class="num">+0.064</td><td class="num">+0.100</td><td>13.12 × 3</td><td>–</td></tr>
+<tr><td>damp all channels</td><td class="num">+0.134</td><td class="num">+0.080 (quick test)</td><td class="num">+0.090</td><td>13.12, 11.25, 13.12</td><td>rejected: CSI −1.6 pts, heavy-rain shock stops propagating</td></tr>
+<tr><td><b>damp all except rain</b></td><td class="num"><b>+0.121</b></td><td class="num"><b>+0.066</b></td><td class="num"><b>+0.100</b></td><td>13.12 × 3</td><td><b>adopted</b>: never worse under either reading</td></tr>
+</tbody></table>
+<p>Shipped λ: refit on 2020 + 2021 (238 windows) with the selection members (out of sample), rain λ = 1. Day 1: all 1.0. Day 8: t2m 0.82, u10 0.60, v10 0.56, msl 0.89, tcwv 0.68. Day 14: 0.25–0.60.</p>
+
+<h3>Seasonal causality and robustness (independent review, 72 windows = every 10th day of 2020–21, ens5)</h3>
+<table>
+<thead><tr><th>Shock</th><th class="num">Propagates</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>warm_ocean</td><td class="num" id="R-warm_prop">88%</td><td>winter is the weakest season</td></tr>
+<tr><td>stable</td><td class="num" id="R-stable_prop">96%</td><td>winter weakest</td></tr>
+<tr><td>monsoon_stall</td><td class="num" id="R-stall_prop">8%</td><td>essentially never propagates</td></tr>
+</tbody></table>
+<p>Mean causality over those windows 12.97/15, minimum 11.25. No gate or disqualification risk found; a fresh clone passes the offline container on py3.12 / torch 2.15 and py3.10 / torch 2.1.2.
+Anti-blur on a random draw of 5 windows: <span id="R-blur_chance">24.5%</span> chance of 8.33 instead of 10 (dry-day rain variance); expected <span id="R-blur_exp">9.61</span>.
+Fixed after the review: OverflowError → 422, NaN input → climatology fill (tests added).</p>
+
+<h3>All runs (from the experiment log; progression single → ens3 → ens5 kept as history)</h3>
 <table>
 <thead><tr><th>id</th><th>what</th><th class="num">named pts/70</th><th class="num">named SS</th><th class="num">dense SS</th><th class="num">CSI skill named / dense</th><th class="num">causality /15</th><th>notes</th></tr></thead>
 <tbody>
@@ -561,16 +634,20 @@ Points are of 70 (skill 45 + anti-blur 10 + causality 15). Evidence strength: 1 
 <tr><td>v1s1</td><td>v1 recipe, seed 1</td><td class="num">65.20</td><td class="num">+0.105</td><td class="num" id="R-v1s1_dense_ss">+0.073</td><td class="num">+0.133 / +0.082</td><td class="num">–</td><td>single-model seed spread ≈ <span id="R-seed_spread">±0.02</span> named SS</td></tr>
 <tr><td>adv1</td><td>+ semi-Lagrangian wind step (cap 2 cells), 4 blocks (reach 8)</td><td class="num">67.55</td><td class="num">+0.119</td><td class="num" id="R-adv1_dense_ss">+0.071</td><td class="num">+0.148 / +0.082</td><td class="num">12.81</td><td>bundled change; no clear win alone, 1 run</td></tr>
 <tr><td>ens2</td><td>mean of v1, v1s1</td><td class="num">68.12</td><td class="num">+0.141</td><td class="num" id="R-ens2_dense_ss">+0.099</td><td class="num">+0.133 / +0.089</td><td class="num">13.12</td><td>+0.025 dense SS over best member</td></tr>
-<tr><td><b>ens3</b></td><td><b>mean of v1, v1s1, adv1 (promoted)</b></td><td class="num"><b>68.44</b></td><td class="num"><b>+0.151</b></td><td class="num"><b>+0.106</b></td><td class="num">+0.145 / +0.090</td><td class="num"><b>13.44</b></td><td>stable 12/12; diversity helps; rain spikes averaged out; stall propagation still fails 5/6</td></tr>
+<tr><td>ens3</td><td>mean of v1, v1s1, adv1 (earlier promoted model)</td><td class="num">68.44</td><td class="num">+0.151</td><td class="num">+0.106</td><td class="num">+0.145 / +0.090</td><td class="num">13.44</td><td>stable <span id="R-ens3_stable">12/12</span>; named gate +0.237, dense +0.224; stall propagation failed <span id="R-ens3_stall">5/6</span>; teleport check 0.000 on all 12 shocks</td></tr>
+<tr><td>v1s2</td><td>v1 recipe, seed 2</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td>member only</td></tr>
+<tr><td>adv1s1</td><td>adv1 recipe, seed 1</td><td class="num">67.81</td><td class="num">+0.129</td><td class="num">+0.075</td><td class="num">+0.128 / +0.087</td><td class="num">–</td><td>single members cluster at dense +0.071 to +0.076</td></tr>
+<tr><td><b>ens5</b></td><td><b>mean of v1, v1s1, v1s2, adv1, adv1s1 (promoted; shipped weights are these recipes retrained on all years)</b></td><td class="num"><b>68.12</b></td><td class="num"><b>+0.163</b></td><td class="num"><b>+0.113</b></td><td class="num">+0.147 / +0.095</td><td class="num"><b>13.12</b> in 6/6</td><td>dense ≈ 28.1 + 14.3 + 10 + 13.1 = 65.5/70; gate dense +0.231; warm_ocean full marks 6/6; monsoon_stall never propagates</td></tr>
 </tbody></table>
 <p class="caption">"rain ×3" in the log is the <code>--rain-weight 3</code> flag; in code the heavy-rain cells' total weight is 1 + 3 = 4.
-Repo scan (15) and brief (15) are not in these totals.</p>
+Repo scan (15) and brief (15) are not in these totals. The earlier ens3 gate and teleport figures are kept only as history.</p>
 
 <h3>How to read them (say this at the desk)</h3>
 <ul>
   <li>Positive SS means better than the better of the two standard baselines. Persistence alone scores <span class="r" data-r="b0_dense_ss"></span> on dense, so it is beaten by a wide margin.</li>
   <li>Quote <b>dense</b> numbers first (144 windows, low noise). Named numbers mirror the hidden case types but rest on 10 windows.</li>
-  <li>Not yet logged in EXPERIMENTS.md (ask the code owner before quoting): per-channel skill, per-lead CSI, and the gate value "SS vs persistence at day 4". The raw eval output for ens3 is in <code>runs/ens_v1_s1_adv1.eval.txt</code>.</li>
+  <li>Say plainly: the evidence is from members trained on 2005–2019; the shipped weights add 2020–21 to training. Mention the two readings of "skill averaged" before a judge raises them.</li>
+  <li>Not logged in <code>docs/EXPERIMENTS.md</code> (ask the code owner before quoting): per-channel skill and per-lead CSI. Everything quoted on this page is in that file.</li>
 </ul>
 </section>
 
@@ -582,7 +659,7 @@ Repo scan (15) and brief (15) are not in these totals.</p>
 <h3>Weather and climate</h3>
 <dl class="gloss">
 <dt>Anomaly</dt><dd>How far today is from normal for this day of the year. <span class="ex">Example: Delhi normally 30 °C on 15 May; today 34 °C → anomaly +4 °C. We divide by the channel std, so the anomaly is in "standard deviations".</span></dd>
-<dt>Climatology</dt><dd>The long-term average weather for each calendar day. Ours: mean over 2005–2019 per day of year, smoothed over 15 days, 365 slots (<code>weights/climatology.npy</code>). <span class="ex">It is a single "typical year", which the rules allow (multi-year archives are not).</span></dd>
+<dt>Climatology</dt><dd>The long-term average weather for each calendar day. Ours: mean over the training years per day of year (2005–2019 for the selection ensemble), smoothed over 15 days, 365 slots (<code>weights/climatology.npy</code>). <span class="ex">It is a single "typical year", which the rules allow (multi-year archives are not).</span></dd>
 <dt>Persistence baseline</dt><dd>"Tomorrow (and every later day) equals today." Hard to beat at day 1, poor at day 8.</dd>
 <dt>Climatology baseline</dt><dd>"Every forecast day equals the normal for that date." Poor at day 1, decent at day 8. The judge compares us to the <i>better</i> of the two.</dd>
 <dt>ERA5</dt><dd>ECMWF's global reanalysis of the atmosphere, hourly, from 1940 on. Our dataset is ERA5 averaged to 1° and to daily values.</dd>
@@ -608,7 +685,7 @@ Repo scan (15) and brief (15) are not in these totals.</p>
 <h3>Model and training</h3>
 <dl class="gloss">
 <dt>Convolution</dt><dd>A small filter slid over the grid; each output cell is a weighted sum of a small neighbourhood. 3×3 = the cell and its 8 neighbours; 1×1 = only the cell itself (mixes channels).</dd>
-<dt id="g-rf">Receptive field</dt><dd>The set of input cells that can influence one output cell. Ours grows by 1 cell per 3×3 conv: 6 cells per day for the plain members, 8 for adv1.</dd>
+<dt id="g-rf">Receptive field</dt><dd>The set of input cells that can influence one output cell. Ours grows by 1 cell per 3×3 conv: 6 cells per day for the 3 plain members, 8 for the 2 advection members.</dd>
 <dt>Replicate padding</dt><dd>At the map border, the conv needs cells outside the map; we copy the edge values outward rather than inventing zeros.</dd>
 <dt>Residual connection</dt><dd>A layer outputs <code>input + correction</code> instead of a brand-new value. Easier to train and stable. We use it twice: inside blocks, and for the whole step (predict the change).</dd>
 <dt>GELU</dt><dd>A smooth activation function: roughly "pass positives, squash negatives", but without ReLU's sharp kink.</dd>
@@ -618,11 +695,13 @@ Repo scan (15) and brief (15) are not in these totals.</p>
 <dt id="g-auto">Autoregressive rollout</dt><dd>Predict day 1, feed it back as input, predict day 2, and so on. Errors can compound, which is why we train on rollouts.</dd>
 <dt>Teacher forcing vs unrolled training</dt><dd>Teacher forcing: train only to predict 1 day from true inputs. Unrolled: let the model run several days on its own predictions and backpropagate the error of every day. Our first 12 epochs are the 1-day phase; the rest are unrolled.</dd>
 <dt>Curriculum</dt><dd>Teach easy first: 1-day steps, then 2, 4, 6-day rollouts (<code>--schedule 1:12,2:6,4:6,6:6</code>).</dd>
-<dt>Ensemble</dt><dd>Several models whose outputs are averaged. Ours: 3 members, same inputs, averaged rollouts.</dd>
+<dt>Ensemble</dt><dd>Several models whose outputs are averaged. Ours: 5 members (3 plain, 2 advection, different seeds), same inputs, averaged rollouts.</dd>
+<dt id="g-damp">Anomaly damping</dt><dd>Shrinking over-confident long-range anomalies back towards the average: <code>out_k = clim_k + λ[k,c] · (out_k − clim_k)</code>, λ between 0 and 1, fitted per lead day and per variable by least squares on years the model did not train on. λ = 1 means "leave it alone", λ = 0 means "just say the normal weather". <span class="ex">Example: at day 8 the model says t2m is 5 K above normal; λ = 0.82 turns that into 4.1 K above normal, because on average the model's day-8 anomalies are a little too big. Rain is not damped (λ = 1), since damping rain lowered heavy-rain CSI and stopped the heavy-rain shock propagating.</span></dd>
+<dt>Pooled vs per-lead skill</dt><dd>Pooled: put leads 1, 4 and 8 into one RMSE per channel, then compute SS once. Per-lead: compute SS separately for each lead, then average. Per-lead gives day 8 (where we only match climatology) an equal vote, so it is harsher. The contract does not say which; see <a href="#skill-avg">How is skill averaged?</a></dd>
 <dt>Semi-Lagrangian advection</dt><dd>Moving a field along the wind by asking, for each cell, "where did the air here come from?" and reading the value there (with interpolation). Stable even for big time steps.</dd>
 <dt>CFL-like speed limit</dt><dd>From numerical weather models: information must not travel more than a set number of cells per step. Ours: tanh cap of 2 cells/day in advection; overall reach ≤ 8 cells/day.</dd>
 <dt>Bilinear interpolation / grid_sample</dt><dd>Reading a value between grid points by blending the 4 nearest cells. PyTorch's <code>grid_sample</code> does this for a whole field at once, and it is differentiable.</dd>
-<dt>Overfitting / held-out validation</dt><dd>Overfitting = memorising the training years. To detect it, score on years the model never saw (2020–2021).</dd>
+<dt>Overfitting / held-out validation</dt><dd>Overfitting = memorising the training years. To detect it, score on years the model never saw (2020–2021 for the selection ensemble; the shipped weights are retrained on those years too, so they have no unseen years left).</dd>
 <dt>AdamW</dt><dd>A standard optimiser (Adam) with weight decay applied separately (the "W"), which gently pulls weights towards zero to reduce overfitting.</dd>
 <dt>Cosine LR schedule</dt><dd>The learning rate starts at 1e-3 and glides down to ~0 along a half cosine over all 30 epochs.</dd>
 <dt>Gradient clipping</dt><dd>If the gradient is huge (common in long rollouts), rescale it to norm 1.0 so one bad batch cannot wreck the weights.</dd>
@@ -661,7 +740,7 @@ python -m http.server 5173
 
 # browser
 http://localhost:5173</pre>
-<p>Check the status dot is green and the model name shows before the judges arrive. If the server is down, the dashboard says so; restart terminal 1.</p>
+<p>The server now runs the final 5-member ensemble (the same 5 recipes retrained on all years, with damping). Check the status dot is green and the model name shows before the judges arrive. If the server is down, the dashboard says so; restart terminal 1.</p>
 
 <h3 id="dash-script">Suggested 5-minute demo script</h3>
 <p>Lead with what is hard to copy: a live shock that stays local and then spreads, zero shock exactly identical, and held-out numbers.</p>
@@ -669,14 +748,14 @@ http://localhost:5173</pre>
 <thead><tr><th>Time</th><th>Do</th><th>Say</th></tr></thead>
 <tbody>
 <tr><td>0:00–0:30</td><td>Dashboard open on "Monsoon onset over Kerala, June 2021", channel t2m or tp.</td><td>The 30-second pitch. "Everything you see is the live API; the server runs offline on CPU."</td></tr>
-<tr><td>0:30–1:15</td><td>Show Prime; toggle Observed; play days 1–10.</td><td>"This is Timeline Prime from 3 real days. 2021 was never used in training. Each 10-day call takes a fraction of a second." (Read the ms in the top bar.)</td></tr>
+<tr><td>0:30–1:15</td><td>Show Prime; toggle Observed; play days 1–10.</td><td>"This is Timeline Prime from 3 real days. Full disclosure: model <i>selection</i> never saw 2020–21, but the shipped weights were then retrained on all years, so these demo days are in-sample for the weights. The held-out evidence is the table on the Results page. Each 10-day call takes a fraction of a second." (Read the ms in the top bar.)</td></tr>
 <tr><td>1:15–2:30</td><td>Preset "Warm Bay of Bengal", Run. Δ panel + spread chart, step day 1 → day 8.</td><td>"Day 1: the response is inside and right around the box. Then it spreads, and the reach bars show it can never move faster than our stencil allows: 6 to 8 cells a day, by construction. Beyond that ring the output is bit-for-bit unchanged; we have a test for exactly that."</td></tr>
 <tr><td>2:30–3:00</td><td>Preset "Zero shock", Run.</td><td>"Zero shock: Δ is exactly zero everywhere, every day. Not small: zero. Deterministic CPU inference."</td></tr>
 <tr><td>3:00–3:45</td><td>Preset "Monsoon stall"; open the impact co-pilot.</td><td>"Cut Arabian Sea winds by 40%. The co-pilot turns Prime vs Multiverse into heat-stress days, rain change and dry days per region, with a one-line advisory. These are proxies, not IMD forecasts; the rules are printed under the table."</td></tr>
 <tr><td>3:45–4:30</td><td>Optional: drag your own box, or let a judge pick one.</td><td>Invite the live shock now, on our terms.</td></tr>
-<tr><td>4:30–5:00</td><td>Switch to this page's <a href="#results">Results</a>.</td><td>"Held-out 2020–2021, the kit's own scoring code: dense skill <span class="r" data-r="ens3_dense_ss"></span> on 144 windows, CSI skill <span class="r" data-r="ens3_csi_dense"></span>, stable on <span class="r" data-r="ens3_stable"></span> shocks. Known weakness: the monsoon-stall response often does not spread far enough to pass 'propagates'."</td></tr>
+<tr><td>4:30–5:00</td><td>Switch to this page's <a href="#results">Results</a>.</td><td>"Held-out 2020–2021 for the selection ensemble, the kit's own scoring code: dense skill <span class="r" data-r="ens5_dense_ss"></span> on 144 windows, CSI skill <span class="r" data-r="ens5_csi_dense"></span>, causality <span class="r" data-r="ens5_caus"></span>/15 in all 6 named windows. Known weaknesses: day 8 only matches climatology, so the per-lead average is lower; and the monsoon-stall response almost never spreads far enough to pass 'propagates' (<span class="r" data-r="stall_prop"></span> of windows)."</td></tr>
 </tbody></table>
-<p>Avoid leading with the heatwave scenario: it is June 2019, a <b>training</b> year. All other scenarios are from held-out 2021.</p>
+<p>Do <b>not</b> say the demo years were held out. Every dashboard scenario (the June 2019 heatwave and the 2021 events) is in-sample for the shipped weights, which are trained on all of 2005–2021. Say that model selection never saw 2020–21, and quote the held-out table as the evidence.</p>
 
 <h3 id="dash-impact">Impact logic (computed in the browser from the two live rollouts)</h3>
 <ul>
@@ -699,15 +778,16 @@ http://localhost:5173</pre>
 <tbody>
 <tr><td>1° grid cannot resolve cyclone cores or orographic rain</td><td>A cell is ~111 km; a cyclone eye and Western Ghats rain bands are smaller.</td><td>Finer grid (see the 0.25° question); orography is already an input.</td></tr>
 <tr><td>Daily means only</td><td>The data is daily; no daily max/min, no diurnal cycle. Hence the heat proxy uses daily mean.</td><td>Add max/min temperature channels if available.</td></tr>
-<tr><td>Rain is the hardest variable; heavy-rain skill at long leads is weak</td><td>Rain is patchy and chaotic; past a few days nobody predicts exact heavy-rain cells. Our CSI is pooled over days 1, 4 and 8; we have not logged the per-lead split, but day 8 is expected to be the weakest.</td><td>Log per-lead CSI; probabilistic rain output.</td></tr>
-<tr><td>monsoon_stall shock often fails "propagates"</td><td>Logged: fails on <span class="r" data-r="ens3_stall"></span> stall shocks. The response stays near the Arabian Sea box: its energy decays before it grows outside the box + 3 cells by enough. Our hypothesis (not tested): a wind cut is a weak, quickly-relaxing anomaly in our anomaly-space model, and the box touches the western edge of the grid, so it can only spread east.</td><td>Study the stall response; train with perturbation pairs.</td></tr>
+<tr><td>Rain is the hardest variable; heavy-rain skill at long leads is weak</td><td>Rain is patchy and chaotic; past a few days nobody predicts exact heavy-rain cells. Our CSI is pooled over days 1, 4 and 8; we have not logged the per-lead split, but day 8 is expected to be the weakest. We do not damp rain because that cost CSI.</td><td>Log per-lead CSI; probabilistic rain output.</td></tr>
+<tr><td>Day 8 only matches climatology</td><td>Per-lead skill is <span class="r" data-r="lead1"></span> / <span class="r" data-r="lead4"></span> / <span class="r" data-r="lead8"></span> at days 1 / 4 / 8. If the judge averages per lead, the RMSE part is about <span class="r" data-r="alt_pts"></span> instead of about <span class="r" data-r="pooled_pts"></span>.</td><td>Stronger long-lead training emphasis; damping already helps slightly under both readings.</td></tr>
+<tr><td>monsoon_stall shock essentially never propagates</td><td>Logged: ens5 never propagates on the named stall windows, and over 72 windows across seasons it propagates only <span class="r" data-r="stall_prop"></span> of the time (ens3 failed <span class="r" data-r="ens3_stall"></span>). The warm_ocean shock is far better but not perfect: <span class="r" data-r="warm_prop"></span> of windows (winter weakest). The response stays near the Arabian Sea box: its energy decays before it grows outside the box + 3 cells by enough. Our hypothesis (not tested): a wind cut is a weak, quickly-relaxing anomaly in our anomaly-space model, and the box touches the western edge of the grid, so it can only spread east.</td><td>Study the stall response; train with perturbation pairs.</td></tr>
 <tr><td>10 m wind is not the steering flow</td><td>Weather systems are steered by winds higher up; we only have 10 m wind. The learned α partly compensates.</td><td>Use upper-level winds if the data had them.</td></tr>
-<tr><td>Training years vs hidden test years</td><td>Members trained on 2005–2019; hidden windows are after 2023-01-10. A warming trend means the climatology may be slightly cold for 2023–24.</td><td>Retrain on all years 2005–2021 (<code>train.py --val-start 2099</code>; not done for the shipped weights).</td></tr>
-<tr><td>Ensemble mean is smoother than reality</td><td>Averaging removes some detail, especially at long leads.</td><td>Still passes anti-blur on our local judge; show members separately or add calibrated spread.</td></tr>
+<tr><td>No held-out score for the shipped weights</td><td>The shipped members are retrained on all years 2005–2021, so 2020–21 is in-sample for them and there is no unseen year left to score. Held-out evidence comes from the selection ensemble (2005–2019). Hidden windows are after 2023-01-10, and a warming trend means the climatology may be slightly cold for 2023–24.</td><td>Recipe was frozen before retraining (no new choices made on the retrained weights); add newer years if data existed.</td></tr>
+<tr><td>Ensemble mean is smoother than reality; anti-blur is noisy per draw</td><td>Averaging (and damping) removes some detail, especially at long leads. Anti-blur is 10/10 on the 144-window mean, but on a random draw of 5 windows there is about a <span class="r" data-r="blur_chance"></span> chance of 8.33, due to dry-day rain variance.</td><td>Passes anti-blur on the dense mean on our local judge; show members separately or add calibrated spread.</td></tr>
 <tr><td>No ocean model</td><td>There is no sea-surface temperature channel, so a warm-ocean shock relaxes like any anomaly instead of persisting as real ocean warmth would.</td><td>A slow "ocean memory" channel.</td></tr>
 <tr><td>Theoretical diagonal reach</td><td>Construction bounds reach in a square (Chebyshev). The judge's no-teleport check uses circles (Euclidean) plus 3 cells. A diagonal corner of the adv member's 8-cell square can be up to about 11.3 cells away on day 1, beyond the judge's 11. In practice the energy that far out is tiny and the judge tolerates up to 5%.</td><td>Use a round stencil, or cap at 7.</td></tr>
 <tr><td>Impact proxies are not official forecasts</td><td>Simple thresholds on a coarse model; region boxes are approximate.</td><td>Validate the advisory rules against observed outcomes.</td></tr>
-<tr><td>Local judge assumptions</td><td>We assume how the judge averages channels per window, and the judge's climatology may differ from ours.</td><td>None possible before results; we used the kit's own functions wherever they exist.</td></tr>
+<tr><td>Local judge assumptions</td><td>We assume how the judge averages channels per window and how it averages leads (pooled vs per lead; see <a href="#skill-avg">above</a>), and the judge's climatology may differ from ours.</td><td>None possible before results; we used the kit's own functions wherever they exist.</td></tr>
 </tbody></table>
 </section>
 
@@ -717,11 +797,11 @@ http://localhost:5173</pre>
 <p>Click to reveal. Answer in the first sentence, then give one piece of evidence.</p>
 
 <h3>Design</h3>
-<details><summary>1. In one sentence, what is your model?</summary><div><p>A residual CNN that steps India's weather forward one day at a time in anomaly space, with a small fixed receptive field so shocks cannot jump; three of them averaged.</p></div></details>
+<details><summary>1. In one sentence, what is your model?</summary><div><p>A residual CNN that steps India's weather forward one day at a time in anomaly space, with a small fixed receptive field so shocks cannot jump; five of them averaged, then long-range anomalies gently damped towards climatology.</p></div></details>
 
 <details><summary>2. Why not a U-Net or a transformer?</summary><div><p>Both are built to mix information across the whole map: a U-Net downsamples (pooling), so one step can reach far; attention connects every cell to every cell. That breaks the causality the judge tests for: a shock would affect India in one step. Our stencil makes the speed limit a guarantee, not a hope. It is also small and fast on CPU (<span class="r" data-r="latency"></span> per 10-day call). Trade-off: less long-range context per step, which we accept.</p></div></details>
 
-<details><summary>3. How do you know it doesn't teleport?</summary><div><p>Two levels. By construction: only 3×3 and 1×1 convolutions and per-cell operations, so each step can move information at most 6 cells (8 for the advection member). By test: <code>test_no_teleport_by_construction</code> puts a shock in one cell and checks that every cell beyond <code>reach × day</code> is <i>exactly</i> unchanged, difference 0.0, not just small. And by the judge's own <code>causality_checks</code> run locally: no shock flagged for teleporting. One subtlety, if pushed: we bound distance in squares, the judge measures circles; the far diagonal corner is theoretical and carries negligible energy.</p></div></details>
+<details><summary>3. How do you know it doesn't teleport?</summary><div><p>Two levels. By construction: only 3×3 and 1×1 convolutions and per-cell operations, so each step can move information at most 6 cells (8 for the advection members). By test: <code>test_no_teleport_by_construction</code> puts a shock in one cell and checks that every cell beyond <code>reach × day</code> is <i>exactly</i> unchanged, difference 0.0, not just small. And by the judge's own <code>causality_checks</code> run locally: no shock flagged for teleporting. One subtlety, if pushed: we bound distance in squares, the judge measures circles; the far diagonal corner is theoretical and carries negligible energy.</p></div></details>
 
 <details><summary>4. Why anomalies instead of raw values?</summary><div><p>Most of the raw signal is the seasonal cycle, which we already know from the calendar. Subtracting climatology leaves the part that is actually hard: today's departure from normal. It also gives a safe default: if the network is unsure, the forecast falls back to "normal weather plus today's anomaly", and long rollouts stay near climatology instead of drifting. And it puts all 6 variables on the same scale.</p></div></details>
 
@@ -729,40 +809,40 @@ http://localhost:5173</pre>
 
 <details><summary>6. Why does the zero shock give exactly zero?</summary><div><p>The server adds the perturbation to the last input day; adding zeros leaves every float identical. Inference is deterministic on CPU: eval mode, no dropout, no random sampling, fixed thread count, members always in the same order. Same input bits → same output bits. <code>test_null_shock_is_identical</code> asserts a maximum difference of exactly 0.0. The judge only needs 1e-3 std.</p></div></details>
 
-<details><summary>7. Why doesn't it explode over 10 (or 30) days?</summary><div><p>Four reasons: residual updates in anomaly space; the climatology anchor; training on unrolled 2, 4 and 6-day rollouts on its own predictions, so it learned not to amplify its own errors; and a physical gate every step. Evidence: stable on <span class="r" data-r="ens3_stable"></span> local shocks, and a test that runs absurd inputs (+25 K, ×20 rain, ×5 wind) for 30 days and stays finite and valid.</p></div></details>
+<details><summary>7. Why doesn't it explode over 10 (or 30) days?</summary><div><p>Four reasons: residual updates in anomaly space; the climatology anchor; training on unrolled 2, 4 and 6-day rollouts on its own predictions, so it learned not to amplify its own errors; and a physical gate every step. Evidence: the 3-member ensemble was stable on <span class="r" data-r="ens3_stable"></span> local shocks, ens5 scores causality <span class="r" data-r="ens5_caus"></span>/15 in all 6 named windows, and a test that runs absurd inputs (+25 K, ×20 rain, ×5 wind) for 30 days and stays finite and valid.</p></div></details>
 
 <details><summary>8. What happens after 30 days?</summary><div><p>The server accepts 1 to 30 steps (more returns a 422 error, by our choice). Physically, after a couple of weeks any forecast loses day-to-day skill; by design ours relaxes towards climatology rather than drifting or exploding. We do not claim skill there; the judge scores days 1, 4, 8.</p></div></details>
 
-<details><summary>9. Why doesn't it blur?</summary><div><p>Today's structure is the starting point (residual in anomaly space) instead of being re-generated, and the rain weighting keeps extremes in the loss. We measure it with the kit's own variance-ratio function: full anti-blur points on our local judge. Even the 3-member average keeps enough variance.</p></div></details>
+<details><summary>9. Why doesn't it blur?</summary><div><p>Today's structure is the starting point (residual in anomaly space) instead of being re-generated, and the rain weighting keeps extremes in the loss. We measure it with the kit's own variance-ratio function: full anti-blur points on our local judge. Even the 5-member average keeps enough variance on the 144-window mean (10/10). Honest caveat: on a random draw of just 5 windows there is about a <span class="r" data-r="blur_chance"></span> chance of scoring 8.33 instead of 10, because rain on a dry day can push the variance ratio past 2.5.</p></div></details>
 
-<details><summary>10. Why an ensemble, and doesn't averaging blur?</summary><div><p>Each trained network makes partly random errors; averaging cancels some of them, which lowers RMSE. Logged: the 2-member ensemble beat its best member by <span class="r" data-r="ens2_gain"></span> dense SS, and ens3 is better again. It also fixed stability: a single model had rain spikes above 5 std on <span class="r" data-r="v1_stab_fail"></span> shocks; the average had none. Yes, averaging smooths a little, but the day-8 variance stays above the 40% line on our local judge. Averaging is deterministic, so the null shock stays exact.</p></div></details>
+<details><summary>10. Why an ensemble, and doesn't averaging blur?</summary><div><p>Each trained network makes partly random errors; averaging cancels some of them, which lowers RMSE. Logged: the 2-member ensemble beat its best member by <span class="r" data-r="ens2_gain"></span> dense SS, and ens5 beats the best single member by <span class="r" data-r="ens5_gain"></span>. It also fixed stability: a single model had rain spikes above 5 std on <span class="r" data-r="v1_stab_fail"></span> shocks; the 3-member average had none. Yes, averaging smooths a little, but the day-8 variance stays above the 40% line on our local judge. Averaging is deterministic, so the null shock stays exact.</p></div></details>
 
 <details><summary>11. What is the advection member, and why only 4 blocks?</summary><div><p>Before the CNN, it shifts today's anomaly along the 10 m wind (semi-Lagrangian, bilinear), with a learned scale and a smooth cap of 2 cells per day. That costs 3 cells of reach (2 + 1 for interpolation), so with stem + 4 blocks the total is exactly 8, the judge's limit. Alone it was no clear win; it helps the ensemble by being different.</p></div></details>
 
 <details><summary>12. Why replicate padding?</summary><div><p>Zero padding would make the map edge look like a strong negative anomaly and inject fake signals. Copying the edge values is neutral, and it never brings in information from further than one cell.</p></div></details>
 
 <h3>Validation and numbers</h3>
-<details><summary>13. How did you validate?</summary><div><p>Trained on 2005–2019 only, scored on held-out 2020–2021 with the kit's own scoring functions imported directly: RMSE skill, CSI, anti-blur, causality with the official <code>make_shock</code>, null consistency, validity. Two window sets: 10 "named" windows matching the hidden case types, and 144 "dense" windows (every 5th day), which we trust more. The climatology reference is also built from training years only.</p></div></details>
+<details><summary>13. How did you validate?</summary><div><p>Model selection used members trained on 2005–2019 only, scored on held-out 2020–2021 with the kit's own scoring functions imported directly: RMSE skill, CSI, anti-blur, causality with the official <code>make_shock</code>, null consistency, validity. Two window sets: 10 "named" windows matching the hidden case types, and 144 "dense" windows (every 5th day), which we trust more. The climatology reference is also built from training years only. Then we retrained the same 5 recipes on all years for shipping, so the shipped weights have seen 2020–21; the held-out table is the selection ensemble's. The damping factors were fitted on 2020 and checked on 2021 (out of sample).</p></div></details>
 
-<details><summary>14. What is your skill score?</summary><div><p>Dense, 144 held-out windows: <span class="r" data-r="ens3_dense_ss"></span> mean SS against the better of persistence and climatology. Named, 10 windows: <span class="r" data-r="ens3_named_ss"></span>. Full marks need 0.12, so on the dense estimate we expect roughly <span class="r" data-r="dense_rmse_pts"></span> of 30.</p></div></details>
+<details><summary>14. What is your skill score?</summary><div><p>Dense, 144 held-out windows (selection ensemble): <span class="r" data-r="ens5_dense_ss"></span> mean SS against the better of persistence and climatology. Named, 10 windows: <span class="r" data-r="ens5_named_ss"></span>. Full marks need 0.12, so on the dense estimate we expect roughly <span class="r" data-r="dense_rmse_pts"></span> of 30, if the judge pools leads. See question 32 for the other reading.</p></div></details>
 
-<details><summary>15. What is your CSI and why is it what it is?</summary><div><p>CSI skill over the better baseline: <span class="r" data-r="ens3_csi_dense"></span> dense, <span class="r" data-r="ens3_csi_named"></span> named; full marks at 0.10. It is positive because heavy-rain cells get 4× weight in the loss. It is not higher because heavy rain is patchy and sub-grid at 1°, and at day 8 the exact location is close to unpredictable.</p></div></details>
+<details><summary>15. What is your CSI and why is it what it is?</summary><div><p>CSI skill over the better baseline: <span class="r" data-r="ens5_csi_dense"></span> dense, <span class="r" data-r="ens5_csi_named"></span> named; full marks at 0.10. It is positive because heavy-rain cells get 4× weight in the loss. It is not higher because heavy rain is patchy and sub-grid at 1°, and at day 8 the exact location is close to unpredictable.</p></div></details>
 
 <details><summary>16. Why is rain skill the weakest?</summary><div><p>Rain is intermittent (zero most places, huge in a few), its daily value is a sum, not a mean, it depends on processes smaller than a 1° cell (convection, mountains), and it errs in both position and amount, which RMSE double-penalises. Persistence and climatology are also comparatively good references for rain at some leads. Temperature, pressure and water vapour are smoother and easier.</p></div></details>
 
 <details><summary>17. Named vs dense: why two numbers?</summary><div><p>Named (10 windows) mirrors the hidden test's case types, but 10 samples are noisy: two seeds of the same recipe differed by about ±0.02. Dense (144 windows) gives a stable mean. We choose models on dense.</p></div></details>
 
-<details><summary>18. Do you beat persistence at day 4 (the gate)?</summary><div><p>Yes, our local judge checks the gate on every evaluation and ens3 passes it. Overall, persistence alone scores <span class="r" data-r="b0_dense_ss"></span> dense SS against the best reference, and we score <span class="r" data-r="ens3_dense_ss"></span>.</p></div></details>
+<details><summary>18. Do you beat persistence at day 4 (the gate)?</summary><div><p>Yes, our local judge checks the gate on every evaluation and ens5 passes it: mean SS against persistence at day 4 is <span class="r" data-r="gate_dense"></span> on the dense set. Overall, persistence alone scores <span class="r" data-r="b0_dense_ss"></span> dense SS against the best reference, and we score <span class="r" data-r="ens5_dense_ss"></span>.</p></div></details>
 
 <details><summary>19. Is the dashboard live?</summary><div><p>Yes. Every model map comes from a fresh <code>/simulate</code> call to our server; nothing is pre-rendered. Kill the server and the dashboard shows "SERVER OFFLINE" and no model output. The scenario files only contain the 3 input days and the 10 observed days for comparison.</p></div></details>
 
-<details><summary>20. What did not work?</summary><div><p>(a) The smoke model mostly failed "propagates": the shock decayed before it left the box. (b) A single model sometimes produced rain spikes above 5 std (stability failed on <span class="r" data-r="v1_stab_fail"></span> shocks). The ensemble fixed it. (c) The advection member was no clear win alone. (d) The monsoon-stall shock still fails "propagates" on <span class="r" data-r="ens3_stall"></span>. (e) Plans we dropped: rain in log space with softplus, a variance loss term, a learned climatology blend. The simpler design was enough.</p></div></details>
+<details><summary>20. What did not work?</summary><div><p>(a) The smoke model mostly failed "propagates": the shock decayed before it left the box. (b) A single model sometimes produced rain spikes above 5 std (stability failed on <span class="r" data-r="v1_stab_fail"></span> shocks). The ensemble fixed it. (c) The advection member was no clear win alone. (d) The monsoon-stall shock essentially never propagates (<span class="r" data-r="stall_prop"></span> of 72 windows). (e) Damping every channel: it raised pooled skill but cost CSI and stopped the heavy-rain shock propagating, so rain is excluded. (f) Plans we dropped: rain in log space with softplus, a variance loss term, a learned climatology blend. The simpler design was enough.</p></div></details>
 
-<details><summary>21. Why does monsoon_stall fail to propagate?</summary><div><p>The response is localised and stable, so we still earn 3 of 4 quarters on it, but its energy outside box + 3 cells does not grow enough by days 4–8. Our reading: cutting the wind is a weak, fast-relaxing anomaly in an anomaly-space model, and the box sits on the grid's western edge. It is the most honest open problem we have.</p></div></details>
+<details><summary>21. Why does monsoon_stall fail to propagate?</summary><div><p>Over 72 windows across seasons it propagates only <span class="r" data-r="stall_prop"></span> of the time (warm_ocean: <span class="r" data-r="warm_prop"></span>). The response is localised and stable, so we still earn 3 of 4 quarters on it, but its energy outside box + 3 cells does not grow enough by days 4–8. Our reading: cutting the wind is a weak, fast-relaxing anomaly in an anomaly-space model, and the box sits on the grid's western edge. It is the most honest open problem we have.</p></div></details>
 
 <details><summary>22. How would you scale to 0.25°?</summary><div><p>Same design, 4× more cells each way (≈ 128 × 144). Each cell is 4× smaller, so to allow the same physical speed per day the reach in cells must be 4× larger: either more layers or, better, 4 sub-steps per day each with its own small stencil, which keeps the causality guarantee. Convolutions scale linearly with cell count, about 16× compute per step, still feasible on GPU for training. We would need finer data and probably more channels.</p></div></details>
 
-<details><summary>23. What would you do with another week?</summary><div><p>Retrain the members on all years 2005–2021 to narrow the gap to 2023–24; more ensemble members and seeds; log per-channel and per-lead scores; work on the stall propagation; add a slow ocean-memory channel; probabilistic rain; validate the impact rules against observed heat and rain outcomes.</p></div></details>
+<details><summary>23. What would you do with another week?</summary><div><p>The all-years retrain is done; with more time: more ensemble members and seeds; log per-channel and per-lead scores; work on the stall propagation; add a slow ocean-memory channel; probabilistic rain; validate the impact rules against observed heat and rain outcomes.</p></div></details>
 
 <details><summary>24. Is it physics or machine learning?</summary><div><p>Machine learning with physical structure built in: locality (finite speed), climatology anchoring, physical bounds, and an optional physically-motivated advection step with a CFL-like cap. It does not solve the equations of motion.</p></div></details>
 
@@ -770,7 +850,7 @@ http://localhost:5173</pre>
 
 <details><summary>26. How fast is it, and will it fit the judge's limits?</summary><div><p>In a container mimicking the judge (offline, 4 CPU, 6 GB, read-only): <span class="r" data-r="latency"></span> per 10-step call (limit 5 s), ready in <span class="r" data-r="ready"></span> (limit 120 s), <span class="r" data-r="ram"></span> RAM (limit 6 GB). It also passes the kit's schema validator there.</p></div></details>
 
-<details><summary>27. What happens with bad input?</summary><div><p>Wrong shapes or missing fields get a 422 error with a message, not a crash. NaN in the input is replaced by 0; any non-finite output falls back to climatology; rain and temperature are clamped, so output always passes the validity gate.</p></div></details>
+<details><summary>27. What happens with bad input?</summary><div><p>Wrong shapes or missing fields get a 422 error with a message, not a crash. NaN/Inf input cells (which the contract forbids) are filled from that day's climatology; malformed requests, including absurd step counts that overflow, return 422 (tested); any non-finite output falls back to climatology; rain and temperature are clamped, so output always passes the validity gate.</p></div></details>
 
 <details><summary>28. How does the model know about land, mountains and latitude?</summary><div><p>Every step gets the land-sea mask, orography (in km), latitude and day-of-year as extra input channels, plus the climatology of the target day. They are bundled in the weights folder, since the API does not send them.</p></div></details>
 
@@ -778,7 +858,16 @@ http://localhost:5173</pre>
 
 <details><summary>30. A judge applies a new shock live, somewhere odd. What do we expect?</summary><div><p>A response that starts in and around the box and spreads no faster than 6–8 cells per day; nothing changes beyond the reach ring. Its size depends on the channel and the season (a shock against the season may relax quickly). If it is applied at a map edge, the spread is one-sided. If the shock is zero, the output is identical.</p></div></details>
 
-<details><summary>31. How many parameters? How long to train?</summary><div><p>Width 96, 5 blocks (4 for adv1); about 7 minutes per run on an RTX 4050; the three weight files are about 1.6–2 MB each. (If asked for an exact count, <code>train.py</code> prints it at start-up.)</p></div></details>
+<details><summary>31. How many parameters? How long to train?</summary><div><p>Width 96, 5 blocks (4 for the advection members); about 7 minutes per run on an RTX 4050; the five weight files are about 1.6–2 MB each. (If asked for an exact count, <code>train.py</code> prints it at start-up.)</p></div></details>
+
+<h3>Skill averaging, damping, honesty about training years</h3>
+<details><summary>32. How is skill averaged over leads? Your number might be much lower.</summary><div><p>The contract does not specify it, so we report both. If the judge pools leads 1, 4 and 8 into one RMSE per channel (what the kit's <code>rmse_lat</code> does over leading dimensions, and what our local judge does), dense skill is <span class="r" data-r="ens5_dense_ss"></span>, about <span class="r" data-r="pooled_pts"></span> for RMSE. If it computes SS per lead and then takes the mean, skill is about <span class="r" data-r="alt_ss"></span>, roughly <span class="r" data-r="alt_pts"></span>, because day 8 only matches climatology. Per-lead skill: <span class="r" data-r="lead1"></span> at day 1, <span class="r" data-r="lead4"></span> at day 4, <span class="r" data-r="lead8"></span> at day 8. CSI, anti-blur and causality do not depend on this choice. Our damping was checked under both readings and is never worse.</p></div></details>
+
+<details><summary>33. What is the anomaly damping, and why isn't rain damped?</summary><div><p>At long leads the network's anomalies are a bit over-confident, so we shrink them towards the normal weather: <code>out = clim + λ · (out − clim)</code>, with λ between 0 and 1 per lead day and variable, fitted by least squares on 2020 and scored on 2021 (out of sample). Day 1 is untouched (λ = 1); at day 8, for example, t2m 0.82 and u10 0.60. Rain stays at λ = 1 because damping every channel cost 1.6 CSI points and the heavy-rain shock stopped propagating. The gain is small (pooled +0.120 to +0.121, per-lead +0.064 to +0.066 on 2021), so we present it as a safety measure, not a headline.</p></div></details>
+
+<details><summary>34. Your demo years were in training, weren't they?</summary><div><p>Yes, for the shipped weights, and we say so. Model selection (which members, how many, whether to damp) used members trained on 2005–2019 and scored on 2020–2021. Once the design was fixed, we retrained the same 5 recipes on all years 2005–2021 for shipping. So the dashboard scenarios are in-sample for the weights; the evidence for generalisation is the held-out table from the selection ensemble.</p></div></details>
+
+<details><summary>35. Does the warm-ocean shock always spread?</summary><div><p>No. Over 72 windows across seasons (independent review of ens5) it propagates in <span class="r" data-r="warm_prop"></span> of them, with winter the weakest, and the stability check passes in <span class="r" data-r="stable_prop"></span>. The monsoon_stall shock propagates in only <span class="r" data-r="stall_prop"></span>. Mean causality over those windows is 12.97/15, minimum 11.25.</p></div></details>
 </section>
 
 <!-- ============================================================ 11 RULES -->
@@ -790,7 +879,7 @@ http://localhost:5173</pre>
 <tr><td>Offline, no weather APIs at inference</td><td><code>serve.py</code> imports only <code>model/</code> (numpy + torch) and FastAPI/uvicorn. Training data is read only by <code>train/</code>.</td></tr>
 <tr><td>No hardcoded dates in inference code</td><td>The server works from <code>doy_sincos</code> only. Dates appear only in training/evaluation/scenario scripts, which are not inference files.</td></tr>
 <tr><td>No multi-year archive, no .nc in the repo</td><td>Data lives outside the repo in <code>../data/</code>. The shipped climatology is 365 × 6 × 32 × 36 (allowed; the scan flags only &gt; 400 days). Dashboard scenarios are 13 days each, as JSON.</td></tr>
-<tr><td>Weights in the repo</td><td><code>weights/</code>: model_0.pt, model_1.pt, model_2.pt, config.json, stats.json, climatology.npy, static.npy.</td></tr>
+<tr><td>Weights in the repo</td><td><code>weights/</code>: model_0.pt … model_4.pt, config.json, stats.json, climatology.npy, static.npy, plus <code>damping.npy</code> (the fitted λ table).</td></tr>
 <tr><td>Server separate from UI</td><td>No streamlit/plotly/matplotlib in the server; the dashboard is a separate static folder calling the live API.</td></tr>
 <tr><td>Contract</td><td><code>python serve.py --port 8000</code> on 0.0.0.0, <code>/health</code> and <code>/simulate</code> with nested lists in physical units; checked with the kit's schema validator in an offline container (<code>scripts/judge_check.sh</code>).</td></tr>
 </tbody></table>
@@ -807,14 +896,21 @@ http://localhost:5173</pre>
 <tr><td>Checkpoint</td><td class="num">0.5</td><td>A weight file &gt; 1 KB (or a Hugging Face link).</td><td><code>weights/*.pt</code></td></tr>
 </tbody></table>
 <p>By these rules we expect 15/15. The test only asserts the anti-cheat part; the health part follows from the files listed.</p>
+
+<h3>Tests (14)</h3>
+<p><code>tests/test_model.py</code> (9): <code>test_shape_and_validity_gate</code>, <code>test_extreme_inputs_stay_valid</code>, <code>test_null_shock_is_identical</code>,
+<code>test_deterministic</code>, <code>test_no_teleport_by_construction</code>, <code>test_judge_teleport_check_point_shock</code>,
+<code>test_reach_within_judge_speed_limit</code>, <code>test_fast_enough</code>, <code>test_nan_input_falls_back_to_climatology</code>.
+<code>tests/test_api.py</code> (5): <code>test_health</code>, <code>test_simulate_contract</code>, <code>test_bad_input_is_422_not_500</code>,
+<code>test_repo_scan_clean</code>, <code>test_overflow_steps_is_422</code>.</p>
 </section>
 
 <section id="sources">
 <h2>Sources for this page</h2>
 <p>Rules: <code>TRACKS_T2_vs_T3.md</code> (section 0–1), <code>kits/yug-monsoon-kit/docs/R1_CONTRACT.md</code>, <code>monsoon_r1/scoring.py</code>, <code>monsoon_r1/repo_scan.py</code>.
 Code: <code>model/net.py</code>, <code>model/simulator.py</code>, <code>model/common.py</code>, <code>serve.py</code>, <code>train/*.py</code>, <code>tests/*.py</code>, <code>dashboard/app.js</code>, <code>dashboard/index.html</code>, <code>weights/config.json</code>.
-Numbers: <code>docs/EXPERIMENTS.md</code> only. General science and ML definitions in the glossary are standard knowledge.</p>
-<p class="caption">Note on older docs: <code>README.md</code> and <code>CLAUDE.md</code> say "6 cells per simulated day". That is true for the two plain members; the shipped ens3 also contains the advection member, whose reach is 8. Say "6 to 8, never above the judge's 8".</p>
+Numbers: <code>docs/EXPERIMENTS.md</code> only (context also from <code>README.md</code>, <code>docs/brief.html</code> / <code>docs/BRIEF.pdf</code>, <code>train/fit_damping.py</code>, <code>train/evaluate.py</code>). General science and ML definitions in the glossary are standard knowledge.</p>
+<p class="caption">Note on older docs: <code>README.md</code> and <code>CLAUDE.md</code> say "6 cells per simulated day". That is true for the three plain members; the shipped ens5 also contains two advection members, whose reach is 8. Say "6 to 8, never above the judge's 8".</p>
 </section>
 </main>
 </div>
