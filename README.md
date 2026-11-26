@@ -15,9 +15,10 @@ Team Aflatoon. Yugaantar DevForge 2026, Track 2. The 2-page project brief is [do
   - 8 cells (Chebyshev distance) for the 2 wind-advection members. These first carry the anomaly up to 2 cells along the 10 m wind and then add a CNN residual.
 
   `tests/test_model.py::test_no_teleport_by_construction` proves this bound bit-exactly. `test_judge_teleport_check_point_shock` checks the judge's own Euclidean teleport metric.
-- **Ensemble.** The shipped model averages the rollouts of 5 members (3 plain, 2 advection, different seeds).
+- **Ensemble.** The shipped model (`meghdoot-ens5sk`) averages the rollouts of 5 members (3 plain, 2 advection, different seeds).
+- **Metric-aligned loss.** Members are trained on the judge's own skill ratio instead of plain MSE: each sample's error is divided by the error of the better baseline (persistence or climatology) for the same lead and channel, then square-rooted (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss weights every lead and window as the judge does. Held-out 2020–21 (144 windows): pooled skill +0.154 (was +0.113 with MSE), per-lead skill +0.112 (was +0.058), heavy-rain CSI skill +0.105. The idea came from an independent research pass that had not seen our experiment history.
 - **Calibrated risk maps (dashboard).** The 5 members also give probabilities of heavy rain and heat. They are blended with historical frequencies using weights fitted out of sample, and they beat "normal odds" at every lead on held-out 2021 (`train/fit_risk.py`, docs/EXPERIMENTS.md).
-- **Training.** The model is trained on its own unrolled predictions over 1 → 2 → 4 → 6 days, so rollouts stay stable.
+- **Training.** The model is trained on its own unrolled predictions over 1 → 2 → 4 → 8 days, so rollouts stay stable.
 
 ## Run (judge path)
 ```bash
@@ -39,21 +40,22 @@ Data: download `india_climate_train.nc` and `stats.json` from https://github.com
 
 ```bash
 python -m train.prepare                                    # -> ../data/prepared.npz (kept outside the repo)
-for s in 0 1 2; do python -m train.train --name v1s$s --seed $s; done                     # trains on 2005-2019
-for s in 0 1;   do python -m train.train --name adv1s$s --seed $s --advect --blocks 4; done
-python -m train.make_ensemble --name ens5 runs/v1s0 runs/v1s1 runs/v1s2 runs/adv1s0 runs/adv1s1
-python -m train.evaluate --weights runs/ens5 --device cuda          # local judge on held-out 2020-2021
-python -m train.causality_sweep --weights runs/ens5                 # both shocks, 72 windows, all seasons
-python -m train.fit_risk --weights runs/ens5 --fit-years 2020 2021 --out runs/ens5/risk.npz
-cp runs/ens5/* weights/
+SK="--skill-loss 1 --schedule 1:10,2:4,4:6,8:6"            # metric-aligned loss, unrolled to 8 days
+for s in 0 1 2; do python -m train.train --name sk_p$s --seed $s $SK; done                    # trains on 2005-2019
+for s in 0 1;   do python -m train.train --name sk_a$s --seed $s --advect --blocks 4 $SK; done
+python -m train.make_ensemble --name ens5sk runs/sk_p0 runs/sk_p1 runs/sk_p2 runs/sk_a0 runs/sk_a1
+python -m train.evaluate --weights runs/ens5sk --device cuda        # local judge on held-out 2020-2021
+python -m train.causality_sweep --weights runs/ens5sk               # both shocks, 72 windows, all seasons
+python -m train.fit_risk --weights runs/ens5sk --fit-years 2020 2021 --out runs/ens5sk/risk.npz
+cp runs/ens5sk/* weights/
 pytest -q && bash scripts/judge_check.sh                   # tests + offline judge replica in Docker
 ```
 The shipped members are trained on 2005–2019 only, so every held-out number in docs/EXPERIMENTS.md is a number of the
 shipped model. We also tried damping long-lead anomalies toward climatology and retraining on all years. Neither is shipped; the evidence is in EXPERIMENTS.md.
-(`v1s0` is called `v1` and `adv1s0` is called `adv1` in docs/EXPERIMENTS.md.)
+The earlier MSE-loss recipe (`v1s0..2`, `adv1s0..1`, default `--schedule 1:12,2:6,4:6,6:6`) is kept in docs/EXPERIMENTS.md as history (`v1s0` is called `v1` and `adv1s0` is called `adv1` there).
 
 ## Results
-Every number, with how it was measured, is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md). A team guide (architecture, glossary, Q&A) is in [docs/explainer.html](docs/explainer.html).
+Held-out 2020–21 summary for the shipped model: pooled skill +0.154, per-lead +0.112, heavy-rain CSI skill +0.105, anti-blur 10/10, causality sweep 13.39/15, 0.25 s per call in the judge container, tests 15/15. Every number, with how it was measured, is in [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md). A team guide (architecture, glossary, Q&A) is in [docs/explainer.html](docs/explainer.html).
 
 ## Repository map
 `serve.py` (API) · `model/` (inference: numpy + torch only) · `train/` (data, training, local judge, ensemble, damping) ·

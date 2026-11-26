@@ -198,3 +198,5 @@ members: Brier skill on 2021 (fit 2020) is heavy rain +0.343 / +0.032 / +0.006 a
 days 1 / 4 / 8. Container: 0.25 s per call, 199 MB. Tests 15/15.
 
 Lesson for the log: train on what you are scored on. The independent agent found it because it was not anchored on our history.
+
+Per-lead skill vs the best reference (dense 144, 2020–21): ens5 +0.217 / +0.024 / −0.067 → **ens5sk +0.284 / +0.072 / −0.019** at days 1 / 4 / 8.

@@ -48,19 +48,19 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <li><b>Ensemble of 5</b> (3 plain, 2 advection; different seeds). Each rolls out separately, then the rollouts are averaged.</li>
 </ul></div><div>
 <ul>
-<li><b>Training.</b> Unrolled curriculum on the model's own predictions: 1 → 2 → 4 → 6 days (30 epochs, AdamW, cosine LR, grad-clip 1). Loss is latitude-weighted MSE in std units, ×4 weight where observed rain > 10 mm/day. 7–15 min per member (RTX 4050).</li>
-<li><b>Honest validation.</b> The shipped members are trained on 2005–2019 only and scored on held-out 2020–2021 with the kit's <i>own</i> <code>monsoon_r1.scoring</code> functions, so every number below belongs to the shipped model. We tried retraining on all years and damping toward climatology; neither improved the measured shocks, so neither ships.</li>
-<li><b>Judge replica.</b> Offline Docker (4 CPU, 6 GB, read-only): kit validator passes, 0.26 s per call, 0.2 GB; repo scan 15/15.</li>
+<li><b>Metric-aligned loss.</b> Each member's error is divided by the error of the better baseline (persistence or climatology) for the same sample, lead and channel, then square-rooted: the RMSE ratio inside the judge's skill score (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss treats every lead alike, and day-1 skill rose from ≈0.17 to ≈0.28. Idea from an independent research pass. Unrolled 1 → 2 → 4 → 8 days.</li>
+<li><b>Honest validation.</b> The shipped members are trained on 2005–2019 only and scored on held-out 2020–2021 with the kit's <i>own</i> <code>monsoon_r1.scoring</code> functions, so every number below belongs to the shipped model. Retraining on all years and damping toward climatology did not help, so neither ships.</li>
+<li><b>Judge replica.</b> Offline Docker (4 CPU, 6 GB, read-only): kit validator passes, 0.25 s per call, 199 MB; tests 15/15; repo scan 15/15.</li>
 </ul></div></div>
 
 <h2>2. Results on held-out 2020–2021 (144 windows, every 5th day)</h2>
 <table>
-<tr><th>Model</th><th>RMSE skill vs best of persistence/climatology (days 1, 4, 8)</th><th>Heavy-rain CSI skill (>10 mm)</th><th>Beat persistence, day 4</th><th>Anti-blur</th><th>Shock causality</th></tr>
+<tr><th>Model</th><th>RMSE skill vs best of persistence/climatology, pooled (per-lead)</th><th>Heavy-rain CSI skill (>10 mm)</th><th>Beat persistence, day 4</th><th>Anti-blur</th><th>Shock causality</th></tr>
 <tr><td>Persistence</td><td>−0.181</td><td>−0.029</td><td>0</td><td>8.3/10</td><td>11.25/15</td></tr>
-<tr><td>Single member (v1)</td><td>+0.076 (≈19/30)</td><td>+0.085</td><td>+0.198</td><td>10/10</td><td>12.5/15, unstable 3/12</td></tr>
-<tr><td><b>Ensemble of 5</b></td><td><b>+0.113 (≈28.1/30)</b></td><td><b>+0.095 (≈14.3/15)</b></td><td><b>+0.231</b></td><td><b>10/10</b></td><td><b>13.1/15, stable 12/12</b> (6 summer/cyclone windows)</td></tr>
+<tr><td>Old ensemble of 5 (MSE loss)</td><td>+0.113 (+0.058)</td><td>+0.095</td><td>+0.231</td><td>10/10</td><td>13.1/15</td></tr>
+<tr><td><b>Shipped: ens5sk</b></td><td><b>+0.154 (30/30)</b> (+0.112, ≈28/30)</td><td><b>+0.105 (15/15)</b></td><td><b>+0.267</b></td><td><b>10/10</b></td><td><b>13.39/15</b> over 72 windows</td></tr>
 </table>
-<p class="tag">On the 10 windows matching the hidden case types (heatwave, onset, heavy rain, cyclone, winter WD × 2 years): skill +0.163, 68.1/70 automated points. The 144 windows give ≈ 65.5/70 if leads are pooled into one RMSE. If each lead is scored separately, skill is +0.06 (≈ 15/30), since day 8 only matches climatology. Across all seasons (72 windows) causality averages 13.1/15: the warm-Bay shock propagates in 89% and stays stable in 94%.</p>
+<p class="tag">Pooled progression: old single +0.076 → old ensemble +0.113 → new single member +0.139 → ens5sk +0.154. Estimated automated total ≈ 68.4/70 pooled, ≈ 66.4/70 per-lead (previous: 65.5 / 53.5). Day 1 is strong; day 8 is only about on par with climatology. Causality over 72 windows: warm-ocean propagates 88%, stable 99%; null shock identical 72/72.</p>
 
 <h2>3. How we prevent drift and blur, and how we know</h2>
 <table>
@@ -72,8 +72,8 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 
 <h2>4. Failure modes we know about</h2>
 <ul>
-<li><b>Monsoon-stall shock.</b> The response is non-zero, local and stable, but most of its energy stays within 3 cells of the Arabian Sea box (on the domain's western edge). The judge's "propagates outward" check failed in 6/6 held-out windows, costing about 1.9 points. The warm-Bay shock passes all four checks in the 6 summer/cyclone windows, and propagates in 89% of 72 windows across all seasons (weakest in winter).</li>
-<li><b>Rain is the weakest channel</b> (skill ≈ −0.015 vs the best reference; CSI is mostly earned at day 1). At 1° and daily means, convective rain is nearly unpredictable past a few days. Also: the ensemble mean is smoother than reality at day 8+, there is no ocean model, and 2023–24 is warmer than training.</li>
+<li><b>Monsoon-stall shock.</b> The response is non-zero, local and stable (stable in 100% of 72 windows), but much of its energy stays near the Arabian Sea box (on the domain's western edge). The judge's "propagates outward" check passes in only 28% of 72 windows (15% for the previous ensemble). The warm-ocean shock propagates in 88% (weakest in winter).</li>
+<li><b>Rain is the weakest channel</b> (skill was ≈ −0.015 vs the best reference on the previous ensemble; CSI is mostly earned at day 1). At 1° and daily means, convective rain is nearly unpredictable past a few days. Also: the ensemble mean is smoother than reality at day 8+, there is no ocean model, and 2023–24 is warmer than training.</li>
 
 </ul>
 </div>
@@ -96,7 +96,7 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <tr><td>Heat-stress days per cell</td><td>daily-mean t2m ≥ 34 °C (a proxy; IMD heatwaves use daily max)</td></tr>
 <tr><td>10-day rain and % change; dry days</td><td>dry day = rain &lt; 2.5 mm (IMD rainy-day threshold)</td></tr>
 <tr><td>Water-stress risk</td><td>HIGH if rain ≤ −25% or ≥ 3 extra dry days; MODERATE if ≤ −10% or ≥ 1.5 extra dry days; WET watch if ≥ +30% and ≥ 50 mm</td></tr>
-<tr><td>Calibrated risk maps (chance of heavy rain / heat per cell and day)</td><td>share of the 5 members above the threshold, blended with the historical monthly frequency (weights fitted out of sample). Brier skill vs normal odds on held-out 2021: heavy rain +0.33 / +0.03 / +0.004, heat +0.58 / +0.20 / +0.09 at days 1 / 4 / 8.</td></tr>
+<tr><td>Calibrated risk maps (chance of heavy rain / heat per cell and day)</td><td>share of the 5 members above the threshold, blended with the historical monthly frequency (weights fitted out of sample). Brier skill vs normal odds on 2021 (fit on 2020): heavy rain +0.343 / +0.032 / +0.006, heat +0.624 / +0.197 / +0.055 at days 1 / 4 / 8.</td></tr>
 <tr><td>Plain-language advisory</td><td>e.g. "Rain −13% vs Prime over Peninsular South in the next 10 days → kharif sowing water-stress risk MODERATE"</td></tr>
 </table>
 <p>Regions are 4 approximate boxes: NW India, Central, Peninsular South, East &amp; NE. The co-pilot is a decision aid built on our simulator, not an official forecast. A real deployment would use IMD district boundaries and daily-max temperature.</p>
