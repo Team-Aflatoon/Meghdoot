@@ -55,6 +55,10 @@ class Simulator:
         # optionally (rain_event) the >10 mm/day event is decided on the raw rain with a per-lead threshold. A shocked call is
         # served as calibrated(base) + (raw(shocked) - raw(base)): the calibration never touches the shock response, and a
         # zero perturbation takes the exact unshocked path (bit-identical null shock).
+        # Optional "shock_member": a shocked call returns ensemble-mean(base) + (member(shocked) - member(base)) for that
+        # member. Averaging several members' shock responses cancels part of the coherent far-field response; the
+        # unshocked forecast is unchanged and a zero perturbation takes the exact unshocked path.
+        self.shock_member = cfg.get("shock_member")
         cp = weights_dir / "calib.npz"
         self.calib = dict(np.load(cp)) if cp.exists() else None
         qp = weights_dir / "rain_qm.npz"
@@ -131,6 +135,16 @@ class Simulator:
 
     @torch.no_grad()
     def simulate(self, init_states: np.ndarray, doy_sincos, steps: int, perturbation=None) -> np.ndarray:
+        if self.shock_member is not None and self.calib is None:
+            base, doy = self._raw(init_states, doy_sincos, steps)
+            if perturbation is not None and np.any(np.asarray(perturbation, dtype="f4") != 0):
+                net = self.nets[int(self.shock_member)]
+                xb, d0, _ = self._prepare(init_states, doy_sincos, None)
+                xs, _, _ = self._prepare(init_states, doy_sincos, perturbation)
+                rb = rollout(net, xb, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0]
+                rs = rollout(net, xs, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0]
+                base = base + (rs - rb).cpu().numpy().astype("f4")
+            return self._finish(base, doy)
         if self.calib is not None:
             base, doy = self._raw(init_states, doy_sincos, steps)
             out = self._calibrate(base, doy)

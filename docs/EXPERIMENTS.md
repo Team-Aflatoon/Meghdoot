@@ -225,3 +225,12 @@ the metric-aligned loss the non-rain channels are already calibrated (C ≈ the 
 
 Note: a single member (sk_p0) has better causality than the 5-member mean (13.59 vs 13.39): averaging cancels part of the
 remote response. The ensemble is kept because it gains far more skill (+0.015 pooled, +0.020 per-lead) than it loses there.
+
+## Shock response from one member (shipped)
+
+Averaging five members' shock responses cancels part of the coherent far-field response (single member sk_p0: 13.59
+causality vs ensemble 13.39). The served forecast stays the 5-member mean; a shocked call adds the shock difference
+of one member: out = mean(base) + (member_k(shocked) − member_k(base)). A zero or null perturbation takes the exact
+unshocked path (null identical 72/72). 72-window sweep by member k: k=0 13.59 (warm 93% / stall 39%), k=1 13.49, k=2 13.59,
+k=3 13.41, k=4 13.31. Shipped k=0, the first plain member, so no extra selection on the sweep windows.
+Forecast scores are unchanged by construction (dense: pooled +0.154, per-lead +0.112, CSI +0.105). Container passes, 0.36–0.48 s per call.
