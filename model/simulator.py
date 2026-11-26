@@ -24,10 +24,11 @@ class Simulator:
         cfg = json.loads((weights_dir / "config.json").read_text())
         # An ensemble is a list of members; each member rolls out independently and the rollouts are averaged.
         members = cfg.get("members") or [{"file": "model.pt", "width": cfg["width"], "blocks": cfg["blocks"],
-                                          "advect": cfg.get("advect", False)}]
+                                          "advect": cfg.get("advect", False), "flux": cfg.get("flux", False)}]
         self.nets = []
         for mcfg in members:
-            net = StencilNet(width=mcfg["width"], blocks=mcfg["blocks"], advect=mcfg.get("advect", False))
+            net = StencilNet(width=mcfg["width"], blocks=mcfg["blocks"], advect=mcfg.get("advect", False),
+                             flux=mcfg.get("flux", False))
             net.load_state_dict(torch.load(weights_dir / mcfg["file"], map_location="cpu", weights_only=True))
             self.nets.append(net.eval().to(self.device))
         self.net = self.nets[0]
@@ -42,6 +43,16 @@ class Simulator:
         # fitted range reuse the last row.
         dp = weights_dir / "damping.npy"
         self.damping = np.clip(np.load(dp).astype("f4"), 0.0, 1.0) if dp.exists() else None
+        # Optional additive bias correction per lead (and channel, optionally per cell), fitted out of sample by
+        # train/fit_bias.py: out_k -= bias[k]. A constant offset is identical with and without a shock, so it cancels
+        # in every Multiverse - Prime difference (causality and the null shock are unaffected).
+        bp = weights_dir / "bias.npy"
+        self.bias = np.load(bp).astype("f4") if bp.exists() else None
+        # Optional per-lead quantile mapping of rain (train/fit_rain_qm.py): a fixed monotone curve per lead maps the
+        # ensemble's rain quantiles onto observed rain quantiles, restoring heavy rain that averaging smooths away.
+        # Pointwise (each cell independently), so locality and the no-teleport guarantee are untouched.
+        qp = weights_dir / "rain_qm.npz"
+        self.rain_qm = dict(np.load(qp)) if qp.exists() else None
         self.static = t(np.load(weights_dir / "static.npy"))
         self.lat = t(LAT)
 
@@ -96,15 +107,28 @@ class Simulator:
     @torch.no_grad()
     def simulate(self, init_states: np.ndarray, doy_sincos, steps: int, perturbation=None) -> np.ndarray:
         xt, d0, doy = self._prepare(init_states, doy_sincos, perturbation)
-        out = None
-        for net in self.nets:
-            r = rollout(net, xt, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0]
-            out = r if out is None else out + r
+        rs = [rollout(net, xt, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0] for net in self.nets]
+        out = rs[0]
+        for r in rs[1:]:
+            out = out + r
         out = (out / len(self.nets)).cpu().numpy().astype("f4")
+        if self.rain_qm is not None:
+            P, O = self.rain_qm["pred_q"], self.rain_qm["obs_q"]          # [L, Q] each, increasing
+            for k in range(out.shape[0]):
+                j = min(k, P.shape[0] - 1)
+                x = np.maximum(out[k, 1], 0.0)
+                y = np.interp(x, P[j], O[j])
+                top = x > P[j, -1]                                         # above the fitted range: keep the offset
+                y[top] = x[top] + (O[j, -1] - P[j, -1])
+                out[k, 1] = y
         return self._finish(out, doy)
 
     def _finish(self, out: np.ndarray, doy: int) -> np.ndarray:
-        """Damping toward climatology, then the validity guards."""
+        """Bias correction, damping toward climatology, then the validity guards."""
+        if self.bias is not None:
+            for k in range(out.shape[0]):
+                b = self.bias[min(k, self.bias.shape[0] - 1)]
+                out[k] -= b if b.ndim == 3 else b[:, None, None]
         if self.damping is not None:
             clim = self.clim.cpu().numpy()
             for k in range(out.shape[0]):
@@ -122,3 +146,4 @@ class Simulator:
         out[:, 0] = np.clip(out[:, 0], 234.15, 332.15)
         out[:, 1] = np.maximum(out[:, 1], 0.0)
         return out
+

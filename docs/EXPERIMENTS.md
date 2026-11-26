@@ -135,3 +135,34 @@ ens5 per-channel skill (dense 144, pooled leads): t2m +0.132, tp −0.015, u10 +
 
 Evidence strength: one seed each. The seed spread of single members is about ±0.003 dense SS (v1 +0.076, v1s1 +0.073,
 adv1s1 +0.075), so both are below the seed range. With about 5,500 training days, more capacity or more epochs does not help.
+
+## Post-processing round 2: rain quantile mapping and bias correction (fit 2020, score 2021, 71 dense windows)
+
+| variant | pooled SS | per-lead SS | CSI skill | causality on 3 named 2021 windows | verdict |
+|---|---:|---:|---:|---|---|
+| ens5 (shipped) | +0.120 | +0.064 | **+0.100** | 13.12 / 13.12 / 13.12 | – |
+| + rain quantile mapping (pointwise, per lead) | +0.123 | +0.072 | +0.075 | 9.38 / 15.00 / 9.38 (stability breaks) | rejected: CSI −3.7 pts (false alarms), shock rain spikes |
+| + bias correction, domain mean per lead × channel | +0.121 | +0.065 | +0.100 | 13.12 ×3 (unchanged by construction) | not shipped: gain within noise |
+| + bias correction, per cell (shrunk) | +0.121 | +0.064 | +0.100 | 13.12 ×3 | not shipped: no gain |
+
+Measured biases are small (day 8: t2m −0.11 K, u10 +0.23 m/s, msl −32 Pa, tcwv −0.85 kg/m²). A probability-matched
+ensemble mean was designed but rejected before testing: it ranks all cells globally, so a local shock would change rain
+everywhere (it breaks the no-teleport guarantee). Quantile mapping was used instead because it is pointwise.
+
+## Moisture-flux members (test of the monsoon-stall hypothesis)
+
+Hypothesis: feeding today's moisture flux (u10·tcwv, v10·tcwv) as pointwise inputs lets the model link a wind cut to
+less moisture transport, so the monsoon-stall response spreads further. Locality unchanged (pointwise features, reach 6).
+
+| run (held-out 2020–21, dense 144) | pooled SS | per-lead SS | CSI skill | causality sweep (72) | stall propagates |
+|---|---:|---:|---:|---:|---:|
+| flux0 (single) | +0.073 | +0.011 | +0.090 | – | – |
+| flux1 (single) | +0.073 | +0.012 | +0.085 | – | – |
+| **ens5 (shipped)** | +0.113 | +0.058 | +0.095 | **13.10** | **15%** |
+| ens7f = ens5 + flux0 + flux1 | +0.115 | +0.062 | +0.097 | 12.97 | 7% |
+| ens5f = v1, flux0, flux1, adv1, adv1s1 | +0.111 | +0.057 | +0.098 | 13.12 | 12% |
+
+Verdict: the hypothesis is rejected (stall propagation did not improve). ens7f is about +0.9 points better on skill and −0.13 on
+causality. That is within the noise of a 5-window judge, so it is **not shipped**. The `--flux` option stays in the code as a
+documented experiment. Conclusion of all probes tonight (capacity, epochs, damping, all-years, quantile mapping, bias,
+flux): this model family is near its ceiling on this data; the remaining automated-score variance is window luck.

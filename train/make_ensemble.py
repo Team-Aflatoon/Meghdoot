@@ -30,7 +30,7 @@ def main() -> None:
         assert np.array_equal(np.load(r / "climatology.npy"), clim0), f"{r}: different climatology"
         shutil.copy(r / "model.pt", out / f"model_{k}.pt")
         members.append({"file": f"model_{k}.pt", "width": cfg["width"], "blocks": cfg["blocks"],
-                        "advect": cfg.get("advect", False), "from": r.name})
+                        "advect": cfg.get("advect", False), "flux": cfg.get("flux", False), "from": r.name})
     for f in ("climatology.npy", "static.npy", "stats.json"):
         shutil.copy(first / f, out / f)
     (out / "config.json").write_text(json.dumps({"name": f"stencil-{a.name}", "members": members}, indent=1))

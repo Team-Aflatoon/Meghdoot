@@ -40,10 +40,13 @@ class StencilNet(nn.Module):
 
     MAX_DISP = 2.0
 
-    def __init__(self, width: int = 96, blocks: int = 5, advect: bool = False):
+    def __init__(self, width: int = 96, blocks: int = 5, advect: bool = False, flux: bool = False):
         super().__init__()
         self.advect = advect
-        n_in = N_IN + (NC if advect else 0)
+        # flux=True: also feed today's moisture flux (u10*tcwv, v10*tcwv), so a wind change maps directly onto
+        # moisture transport (pointwise features: locality and reach are unchanged).
+        self.flux = flux
+        n_in = N_IN + (NC if advect else 0) + (2 if flux else 0)
         self.stem = nn.Conv2d(n_in, width, 3, padding=1, padding_mode="replicate")
         self.blocks = nn.ModuleList(Block(width) for _ in range(blocks))
         self.head = nn.Conv2d(width, NC, 1)
@@ -103,6 +106,9 @@ def rollout(net, x_init, doy0, steps, clim, mean, std, static, lat):
         ang = two_pi * d_next.float() / n_doy
         sincos = torch.stack([torch.sin(ang), torch.cos(ang)], dim=1)
         feats = step_features(torch.stack(anoms[-T_IN:], 1), (clim_next - m) / s, static, sincos, lat)
+        if getattr(net, "flux", False):
+            q = x_last[:, 5] / std[5]
+            feats = torch.cat([feats, torch.stack([x_last[:, 2] / std[2] * q, x_last[:, 3] / std[3] * q], 1)], dim=1)
         if getattr(net, "advect", False):
             carried = net.carry(anoms[-1], x_last[:, 2], x_last[:, 3], lat)
             a_next = carried + net(torch.cat([feats, carried], dim=1))
