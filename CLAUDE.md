@@ -5,8 +5,8 @@
 ## What we build
 A fast, physics-aware climate digital twin of India: `serve.py` (offline, CPU, 4 cores, 6 GB) answers
 `/simulate` with a 10-day rollout from 3 input days, plus localised "multiverse" shocks. Wedge/USP:
-**local-stencil neural stepper** — a residual CNN in climatology-anomaly space whose receptive field is 6
-cells per simulated day (< 8 allowed), so shocks start local and spread at a bounded speed *by construction*.
+**local-stencil neural stepper** — a residual CNN in climatology-anomaly space whose receptive field is 6–8
+cells per simulated day (judge allows 8), so shocks start local and spread at a bounded speed *by construction*.
 
 ## Where things are
 - `serve.py` judge entrypoint (FastAPI). `model/` inference code (numpy + torch only; no kit imports, no dates).

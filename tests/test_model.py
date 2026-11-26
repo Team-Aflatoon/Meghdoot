@@ -80,6 +80,19 @@ def test_no_teleport_by_construction(sim):
     assert np.abs(shock[0] - base[0]).max() > 0          # and it does respond
 
 
+def test_judge_teleport_check_point_shock(sim):
+    """The judge's own Euclidean teleport metric (energy beyond 3 + 8*(day) cells from the box) on a 1-cell box."""
+    S = pytest.importorskip("monsoon_r1.scoring")
+    x = realistic_init(sim)
+    base = sim.simulate(x, sincos(200), 10)
+    box = (15.5, 16.5, 82.5, 83.5)                       # covers the single cell at lat 16, lon 83 region
+    p = np.zeros((6, 32, 36), "f4")
+    from monsoon_r1.contract import box_mask
+    p[0][box_mask(box)] = 3.0; p[5][box_mask(box)] = 5.0
+    chk = S.causality_checks(base, sim.simulate(x, sincos(200), 10, p), box, STD)
+    assert chk["no_teleport"], chk
+
+
 def test_reach_within_judge_speed_limit(sim):
     assert sim.radius <= 8, "judge flags energy beyond 3 + 8 cells/day as teleportation"
 

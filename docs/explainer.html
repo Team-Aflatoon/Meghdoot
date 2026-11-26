@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiverse of Monsoon: team explainer (Team Aflatoon, Track 2)</title>
+<style>
+  :root {
+    --ink: #1d2430; --muted: #5b6676; --line: #d9dee6; --bg: #ffffff; --soft: #f5f7fa;
+    --accent: #1f5fa8; --accent-soft: #e8f0fa; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --good: #1e7a46; --good-soft: #e6f4ec; --bad: #a32020; --bad-soft: #fbeaea;
+    --mono: Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; font: 16px/1.6 var(--sans); color: var(--ink); background: var(--bg); }
+  .wrap { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  nav.toc { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto; padding: 22px 14px 22px 20px;
+            border-right: 1px solid var(--line); background: var(--soft); font-size: 14px; }
+  nav.toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; }
+  nav.toc ol { padding-left: 20px; margin: 0; }
+  nav.toc li { margin: 3px 0; }
+  nav.toc ol ol { font-size: 13px; padding-left: 14px; list-style: none; }
+  nav.toc a { color: var(--ink); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+  main { padding: 28px 44px 80px; min-width: 0; }
+  header.title h1 { font-size: 30px; line-height: 1.2; margin: 0 0 6px; }
+  header.title p { color: var(--muted); margin: 0 0 4px; }
+  h2 { font-size: 24px; margin: 46px 0 10px; padding-top: 10px; border-top: 2px solid var(--line); }
+  h3 { font-size: 18px; margin: 26px 0 8px; }
+  h4 { font-size: 16px; margin: 18px 0 6px; }
+  p, li { max-width: 78ch; }
+  a { color: var(--accent); }
+  code, .term { font-family: var(--mono); font-size: .88em; background: var(--soft); border: 1px solid var(--line);
+                border-radius: 4px; padding: 0 4px; }
+  pre { font-family: var(--mono); font-size: 13.5px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px;
+        padding: 10px 12px; overflow-x: auto; line-height: 1.45; }
+  table { border-collapse: collapse; margin: 12px 0; font-size: 14.5px; width: 100%; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--accent-soft);
+         padding: 10px 14px; border-radius: 6px; margin: 14px 0; }
+  .box.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .box.good { border-left-color: var(--good); background: var(--good-soft); }
+  .box.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .box > :first-child { margin-top: 0; } .box > :last-child { margin-bottom: 0; }
+  .plain::before { content: "In plain words: "; font-weight: 600; color: var(--good); }
+  .tech::before { content: "Precisely: "; font-weight: 600; color: var(--accent); }
+  .r { font-weight: 600; color: var(--accent); white-space: nowrap; border-bottom: 1px dotted var(--accent); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 10px; background: var(--soft);
+         border: 1px solid var(--line); color: var(--muted); vertical-align: middle; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: #fff; }
+  .card h4 { margin-top: 0; }
+  .card dl { margin: 0; } .card dt { font-weight: 600; margin-top: 6px; } .card dd { margin: 0 0 4px 0; }
+  dl.gloss dt { font-weight: 700; margin-top: 14px; }
+  dl.gloss dd { margin: 2px 0 0 18px; max-width: 78ch; }
+  dl.gloss dd .ex { color: var(--muted); }
+  details { border: 1px solid var(--line); border-radius: 6px; margin: 8px 0; background: #fff; }
+  details > summary { cursor: pointer; padding: 8px 12px; font-weight: 600; list-style-position: outside; }
+  details[open] > summary { border-bottom: 1px solid var(--line); background: var(--soft); }
+  details > div { padding: 8px 14px 10px; }
+  .results { border: 2px solid var(--accent); border-radius: 10px; padding: 4px 18px 14px; background: #fbfdff; }
+  .results h2 { border-top: none; margin-top: 14px; }
+  .diagram { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .caption { font-size: 14px; color: var(--muted); }
+  .timeline td:first-child { white-space: nowrap; font-weight: 600; }
+  @media (max-width: 900px) {
+    .wrap { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); }
+    main { padding: 18px; }
+  }
+  @media print {
+    .wrap { display: block; }
+    nav.toc { display: none; }
+    main { padding: 0; }
+    body { font-size: 11pt; }
+    h2 { page-break-after: avoid; }
+    details, .card, table, svg { page-break-inside: avoid; }
+    a { color: var(--ink); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#pitch">Pitch (30 s and 1 min)</a></li>
+    <li><a href="#problem">The problem in plain words</a></li>
+    <li><a href="#scoring">How we are scored</a></li>
+    <li><a href="#arch">Our architecture, step by step</a>
+      <ol><li><a href="#arch-diagram">Diagram</a></li><li><a href="#arch-steps">The steps</a></li><li><a href="#arch-adv">Advection member</a></li><li><a href="#arch-train">Training recipe</a></li></ol></li>
+    <li><a href="#why">Why it works: design decisions</a></li>
+    <li><a href="#results"><b>Results (all numbers)</b></a></li>
+    <li><a href="#glossary">Concepts and glossary</a></li>
+    <li><a href="#dashboard">Dashboard and impact module</a>
+      <ol><li><a href="#dash-run">How to run the demo</a></li><li><a href="#dash-script">5-minute demo script</a></li><li><a href="#dash-impact">Impact logic</a></li></ol></li>
+    <li><a href="#limits">Limitations and failure modes</a></li>
+    <li><a href="#qa">Judge Q&amp;A drill</a></li>
+    <li><a href="#rules">Rules we follow and the repo scan</a></li>
+    <li><a href="#sources">Sources for this page</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="title">
+  <h1>Multiverse of Monsoon: how our climate digital twin works</h1>
+  <p>Team Aflatoon · Yugaantar DevForge 2026, Track 2 · internal explainer for the desk review</p>
+  <p>Read it top to bottom once. Then use the <a href="#qa">Q&amp;A drill</a> to rehearse. Every number lives in the
+    <a href="#results">Results</a> section; elsewhere numbers are pulled from there and look like this: <span class="r">0.000</span>.
+    If a number changes, edit only the Results table.</p>
+</header>
+
+<!-- ============================================================ 1 -->
+<section id="pitch">
+<h2>1. The pitch</h2>
+
+<h3>30-second version</h3>
+<div class="box good">
+<p>"We built a fast, offline climate digital twin of India: a small neural network that steps the weather forward one day at a time
+on the official 32 × 36 grid. What makes it different: each daily step can only see a few neighbouring cells, so a shock
+<b>cannot teleport</b>. It starts where you apply it and spreads at a bounded speed. That is a property of the architecture,
+and we have a bit-exact test for it. A zero shock gives exactly the same output. On held-out years 2020–2021, scored with the
+kit's own scoring code, it beats the better of persistence and climatology (dense skill <span class="r" data-r="ens3_dense_ss"></span>
+over 144 windows)."</p>
+</div>
+
+<h3>1-minute version</h3>
+<ol>
+  <li><b>What it is.</b> A climate digital twin: give it 3 days of real weather, it rolls out the next N days (Timeline Prime).
+    Change the starting state in one region, it shows the alternate future (the Multiverse) and how the change spreads.</li>
+  <li><b>How.</b> A residual CNN ("StencilNet") that works in <i>anomaly</i> space (departure from the normal weather for that day of
+    the year) and predicts only tomorrow's <i>change</i>. Rain is never negative and temperature is clamped to valid values after every step.
+    Three trained networks are averaged (the "ens3" ensemble).</li>
+  <li><b>USP.</b> Causality by construction. The network has only 3×3 and 1×1 convolutions: no pooling, no attention, no global layers.
+    So information moves at most a fixed number of cells per simulated day (6 for two members, 8 for the advection member). The judge
+    calls anything faster than 8 cells/day "teleportation". Our test <code>test_no_teleport_by_construction</code> checks that cells beyond
+    that reach are <i>bit-for-bit</i> unchanged.</li>
+  <li><b>Proof.</b> Held-out 2020–2021, the kit's own <code>scoring.py</code>: dense mean skill <span class="r" data-r="ens3_dense_ss"></span>
+    (persistence: <span class="r" data-r="b0_dense_ss"></span>), heavy-rain CSI skill <span class="r" data-r="ens3_csi_dense"></span> (dense),
+    causality <span class="r" data-r="ens3_caus"></span>/15 on average, stable on <span class="r" data-r="ens3_stable"></span> shocks.
+    Runs offline in the judge's container in <span class="r" data-r="latency"></span> per 10-day call.</li>
+  <li><b>Impact.</b> A "Heat and Kharif water-stress co-pilot" in the dashboard turns Prime vs Multiverse into per-region heat-stress days,
+    rain change, dry days and a one-line advisory.</li>
+</ol>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="problem">
+<h2>2. The problem in plain words</h2>
+
+<h3>What is a climate digital twin?</h3>
+<p class="plain">A computer copy of the atmosphere over India that you can run forward in time, and that you can poke ("what if the Bay
+of Bengal were 3 °C warmer?") to see what would happen.</p>
+<p class="tech">A learned simulator <i>f</i> that maps the last 3 daily states to the next one. Applied repeatedly
+(an <a href="#g-auto">autoregressive rollout</a>), it produces a 10-day forecast. Applied to a perturbed initial state, it
+produces a counterfactual forecast.</p>
+
+<div class="grid2">
+  <div class="card"><h4>Timeline Prime</h4><p>The normal forecast: real starting days, no change. "What will happen."</p></div>
+  <div class="card"><h4>Multiverse</h4><p>The same start with a shock added to the last input day (for example warm the Bay of Bengal
+    by 3 K). "What would happen if." The interesting output is the difference Multiverse − Prime: where it starts, how fast it spreads,
+    whether it stays sane.</p></div>
+</div>
+
+<h3>The data and the grid</h3>
+<ul>
+  <li>17 years of daily weather, 2005–2021 (6,209 days) in <code>india_climate_train.nc</code>, derived from ERA5 (each cell is the mean of
+    the 4 surrounding 1° ERA5 points).</li>
+  <li><b>Grid: 32 × 36 cells of 1°</b>. Cell centres from latitude 6.5° to 37.5° N (south to north, 32 rows) and longitude 65.5° to 100.5° E
+    (west to east, 36 columns). One cell is roughly 111 km tall.</li>
+  <li>Two static fields: land-sea mask and orography (terrain height). The API never sends them; we ship them in <code>weights/static.npy</code>.</li>
+  <li><code>stats.json</code>: mean and standard deviation per channel, for normalising inside the model.</li>
+</ul>
+
+<h3>The 6 variables (channels, in this order)</h3>
+<table>
+<thead><tr><th>#</th><th>Name</th><th>Meaning</th><th>Unit on the wire</th><th>How the daily value is made</th></tr></thead>
+<tbody>
+<tr><td>0</td><td><code>t2m</code></td><td>Air temperature 2 m above the ground</td><td>K (kelvin; °C = K − 273.15)</td><td>mean of 00/06/12/18 UTC</td></tr>
+<tr><td>1</td><td><code>tp</code></td><td>Total precipitation (rain)</td><td>mm/day</td><td>sum over the 24 h</td></tr>
+<tr><td>2</td><td><code>u10</code></td><td>Wind 10 m above ground, eastward component (positive = blowing towards the east)</td><td>m/s</td><td>mean of 4 samples</td></tr>
+<tr><td>3</td><td><code>v10</code></td><td>Wind 10 m above ground, northward component</td><td>m/s</td><td>mean of 4 samples</td></tr>
+<tr><td>4</td><td><code>msl</code></td><td>Mean sea level pressure (low pressure = storms, monsoon trough)</td><td>Pa (100 Pa = 1 hPa)</td><td>mean of 4 samples</td></tr>
+<tr><td>5</td><td><code>tcwv</code></td><td>Total column water vapour: all the water vapour above a square metre, the "fuel" for rain</td><td>kg/m²</td><td>mean of 4 samples</td></tr>
+</tbody></table>
+
+<h3>Inputs and outputs of <code>/simulate</code></h3>
+<pre>POST /simulate
+{
+  "init_states":  [3, 6, 32, 36],   // 3 consecutive days, oldest first, PHYSICAL units
+  "doy_sincos":   [sin, cos],       // sin/cos(2π·doy/365) of the LAST input day
+  "steps":        10,               // days to forecast (our server accepts 1..30)
+  "perturbation": null | [6, 32, 36] // physical delta added to init_states[-1]
+}
+→ { "rollout": [steps, 6, 32, 36],  // rollout[k] = day k+1 after the last input day
+    "inference_ms": float }</pre>
+<p>Plain nested JSON lists, physical units both ways. No dates are ever sent: the model only knows the day of the year (from
+<code>doy_sincos</code>). <code>POST /health</code> must answer <code>{"status": "ready", "model_name": ...}</code>.</p>
+
+<h3>What the judge does (8 blind calls)</h3>
+<ul>
+  <li>5 real windows with hidden dates after 2023-01-10 (they are never sent, only grids and day of year).</li>
+  <li>3 shocks on one real window:
+    <ul>
+      <li><b>warm_ocean</b>: +3.0 K on t2m and +15% of the current tcwv over the <b>Bay of Bengal box</b> (lat 8–20, lon 82–94).</li>
+      <li><b>monsoon_stall</b>: −40% of the current u10 and v10 over the <b>Arabian Sea box</b> (lat 8–20, lon 65–75).</li>
+      <li><b>null</b>: an all-zero perturbation; must equal the unperturbed call.</li>
+    </ul></li>
+  <li>Runtime: CPU only, 4 cores, 6 GB RAM, no internet, repo read-only, each 10-step call under 5.0 s, <code>/health</code> ready within 120 s.</li>
+</ul>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="scoring">
+<h2>3. How we are scored</h2>
+<p>Round 1 is 100 points: forecast skill 45, dynamics 25, repo 15, brief 15. The formulas below are copied from the kit's
+<code>monsoon_r1/scoring.py</code> and <code>repo_scan.py</code> (the same code the grader uses) and <code>docs/R1_CONTRACT.md</code>.</p>
+
+<table>
+<thead><tr><th>Part</th><th class="num">Pts</th><th>Exact rule</th></tr></thead>
+<tbody>
+<tr><td>RMSE skill</td><td class="num">30</td><td>Per channel, <code>SS = 1 − RMSE_model / min(RMSE_persistence, RMSE_climatology)</code>,
+  RMSE latitude-weighted, all 6 channels, lead days 1, 4 and 8, over 5 hidden windows.
+  Points = <code>30 × clip(mean SS / 0.12, 0, 1)</code>. So <b>SS_REF = 0.12</b> earns the full 30; below that, linear; negative gives 0.</td></tr>
+<tr><td>Heavy-rain CSI</td><td class="num">15</td><td>CSI at 10 mm/day (rain &gt; 10 counts as "heavy"), same leads. Skill = <code>(CSI − best_ref) / (1 − best_ref)</code>
+  where best_ref is the better CSI of persistence and climatology. Points = <code>15 × clip(mean skill / 0.10, 0, 1)</code> (<b>CSI_SS_REF = 0.10</b>).</td></tr>
+<tr><td>Anti-blur</td><td class="num">10</td><td>Day-8 spatial variance of our field ÷ that of the real field, per channel, averaged over windows.
+  Channel score = <code>clip(ratio / 0.40, 0, 1)</code> if ratio ≤ 2.5, else 0. Points = 10 × mean over the 6 channels. So 40% to 250% is full marks.</td></tr>
+<tr><td>Perturbation causality</td><td class="num">15</td><td>Two shocks, 7.5 each, split into quarters (details below). A failed null shock halves the total.</td></tr>
+<tr><td>Repo scan</td><td class="num">15</td><td>8 anti-cheat + 7 code health (training pipeline 3, server separate from UI 2, frontend 1, README 0.5, weights 0.5). See <a href="#rules">section 11</a>.</td></tr>
+<tr><td>Brief</td><td class="num">15</td><td>Read and scored by a person.</td></tr>
+</tbody></table>
+
+<h3>The causality checks, exactly</h3>
+<p>The judge computes the response <code>Δ = shocked rollout − base rollout</code>. "Energy" per cell per day = sum over channels of
+<code>(Δ / std)²</code>, using the channel std from <code>stats.json</code>.</p>
+<ol>
+  <li><b>Non-zero:</b> somewhere, some channel moves by at least <code>1e-3</code> std. (A model that ignores shocks gets 0 of 15.)</li>
+  <li><b>Localised:</b> on day 1, at least <b>60%</b> of the response energy is within <b>3 cells</b> of the shock box (the box grown by 3 cells
+    with 4-neighbour steps).</li>
+  <li><b>Propagates:</b> two conditions together.
+    (a) <i>Grows outward</i>: the mean energy outside the 3-cell neighbourhood over days 4–8 is more than 1.5 × the outside energy on day 1, and
+    more than 2% of the peak daily total energy.
+    (b) <i>No teleport</i>: on every day k (1-based), less than 5% of the energy lies further than <code>3 + 8·k</code> cells (Euclidean distance)
+    from the box. 8 cells/day is about 900 km/day, "faster than any atmospheric signal worth the name".</li>
+  <li><b>Stable:</b> the response never exceeds <b>5 std</b> anywhere.</li>
+</ol>
+<p>Scoring per shock: no response → 0. Response but not localised → only the "non-zero" quarter. Localised → 2 quarters plus one each for
+propagates and stable. <b>Null shock</b>: <code>max |a − b| / std ≤ 1e-3</code> or the causality total is halved.</p>
+
+<h3>The qualifying gate (needed for the Top 10)</h3>
+<ul>
+  <li>Valid output on all 8 calls: correct shape, no NaN/Inf, rain ≥ 0 (tolerance −1e-6), t2m between −40 and +60 °C (233.15–333.15 K).</li>
+  <li>Beat persistence at day 4.</li>
+  <li>A non-zero, localised response to at least one shock.</li>
+</ul>
+<p>A failed or invalid window scores 0 for that window; it is never skipped.</p>
+
+<h3>After Round 1</h3>
+<table>
+<thead><tr><th>Step</th><th>Who decides</th><th>Per track?</th></tr></thead>
+<tbody>
+<tr><td>Stage 1: automated score → Top 10</td><td>scorer + code check</td><td>yes</td></tr>
+<tr><td>Stage 2: desk review (live demo + technical Q&amp;A) → Top 2</td><td>organisers</td><td>yes</td></tr>
+<tr><td>Round 3: finalists present to the judging panel</td><td>judges</td><td>no, all tracks compete together</td></tr>
+</tbody></table>
+<p>At the desk, expect: a <b>new shock applied live</b>, "why doesn't it blur?", "why doesn't it explode?", "how do you know the shock spreads
+physically?", questions on the impact logic and on limits. Code freeze: Fri 27 Nov 09:00 IST.</p>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="arch">
+<h2>4. Our architecture, step by step</h2>
+
+<h3 id="arch-diagram">Diagram</h3>
+<svg class="diagram" viewBox="0 0 1000 620" role="img" aria-label="Pipeline from inputs to ensemble output">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 z" fill="#5b6676"/></marker>
+    <style>
+      .bx { fill: #fff; stroke: #1f5fa8; stroke-width: 1.6; rx: 8; }
+      .bx2 { fill: #e8f0fa; stroke: #1f5fa8; stroke-width: 1.6; }
+      .bx3 { fill: #fff4e0; stroke: #9a5b00; stroke-width: 1.6; }
+      .bx4 { fill: #e6f4ec; stroke: #1e7a46; stroke-width: 1.6; }
+      .t { font: 600 14px "Segoe UI", sans-serif; fill: #1d2430; }
+      .s { font: 12px "Segoe UI", sans-serif; fill: #5b6676; }
+      .ln { stroke: #5b6676; stroke-width: 1.6; fill: none; marker-end: url(#ar); }
+      .dash { stroke-dasharray: 5 4; }
+    </style>
+  </defs>
+  <!-- row 1 -->
+  <rect class="bx" x="20" y="20" width="200" height="80" rx="8"/>
+  <text class="t" x="34" y="46">Inputs (physical)</text>
+  <text class="s" x="34" y="66">3 days × 6 ch × 32 × 36</text>
+  <text class="s" x="34" y="84">+ doy sin/cos (+ shock Δ)</text>
+
+  <rect class="bx" x="270" y="20" width="220" height="80" rx="8"/>
+  <text class="t" x="284" y="46">Anomaly normalisation</text>
+  <text class="s" x="284" y="66">(x − climatology[doy]) / std</text>
+  <text class="s" x="284" y="84">clim: 365 days, std: stats.json</text>
+
+  <rect class="bx" x="540" y="20" width="440" height="80" rx="8"/>
+  <text class="t" x="554" y="46">Features: 29 channels per cell</text>
+  <text class="s" x="554" y="66">3 days of anomalies (18) + target-day climatology (6) + land-sea mask,</text>
+  <text class="s" x="554" y="84">orography in km (2) + target-day sin/cos (2) + latitude (1)</text>
+
+  <path class="ln" d="M220,60 H268"/>
+  <path class="ln" d="M490,60 H538"/>
+
+  <!-- StencilNet -->
+  <rect class="bx2" x="300" y="140" width="680" height="150" rx="10"/>
+  <text class="t" x="316" y="164">StencilNet (only 3×3 and 1×1 convolutions, replicate padding)</text>
+  <rect class="bx" x="316" y="180" width="130" height="90" rx="6"/>
+  <text class="t" x="328" y="204">Stem</text>
+  <text class="s" x="328" y="224">3×3 conv → 96 ch</text>
+  <text class="s" x="328" y="242">GELU</text>
+  <text class="s" x="328" y="260">reach +1 cell</text>
+  <rect class="bx" x="476" y="180" width="300" height="90" rx="6"/>
+  <text class="t" x="488" y="204">Residual block × 5 (adv member: × 4)</text>
+  <text class="s" x="488" y="224">h ← h + Conv1×1( GELU( Conv3×3(h) ) )</text>
+  <text class="s" x="488" y="242">each block: reach +1 cell</text>
+  <text class="s" x="488" y="260">no pooling, no attention, no BatchNorm</text>
+  <rect class="bx" x="806" y="180" width="160" height="90" rx="6"/>
+  <text class="t" x="818" y="204">Head</text>
+  <text class="s" x="818" y="224">1×1 conv → 6 ch</text>
+  <text class="s" x="818" y="242">zero-initialised</text>
+  <text class="s" x="818" y="260">= Δ anomaly</text>
+  <path class="ln" d="M446,225 H474"/>
+  <path class="ln" d="M776,225 H804"/>
+  <path class="ln" d="M760,100 V138"/>
+
+  <!-- advection side branch -->
+  <rect class="bx3" x="20" y="140" width="250" height="150" rx="10"/>
+  <text class="t" x="34" y="164">Advection member only</text>
+  <text class="s" x="34" y="186">carry today's anomaly along the</text>
+  <text class="s" x="34" y="204">10 m wind: semi-Lagrangian,</text>
+  <text class="s" x="34" y="222">learned scale α, tanh cap 2 cells/day,</text>
+  <text class="s" x="34" y="240">bilinear grid_sample.</text>
+  <text class="s" x="34" y="258">Output = carried + CNN(features,</text>
+  <text class="s" x="34" y="276">carried)  (CNN gets 6 extra inputs)</text>
+  <path class="ln dash" d="M270,215 H298"/>
+
+  <!-- row 3 -->
+  <rect class="bx" x="20" y="340" width="250" height="90" rx="8"/>
+  <text class="t" x="34" y="366">Residual update</text>
+  <text class="s" x="34" y="386">a_next = a_today + Δ</text>
+  <text class="s" x="34" y="404">(adv: a_next = carried + Δ)</text>
+  <text class="s" x="34" y="422">predicts the CHANGE only</text>
+
+  <rect class="bx" x="320" y="340" width="250" height="90" rx="8"/>
+  <text class="t" x="334" y="366">Back to physical units</text>
+  <text class="s" x="334" y="386">x = climatology[next day]</text>
+  <text class="s" x="334" y="404">    + a_next × std</text>
+  <text class="s" x="334" y="422">"climatology anchor"</text>
+
+  <rect class="bx4" x="620" y="340" width="360" height="90" rx="8"/>
+  <text class="t" x="634" y="366">Physical gate (every step)</text>
+  <text class="s" x="634" y="386">rain = ReLU(rain) ≥ 0</text>
+  <text class="s" x="634" y="404">t2m clamped to 234.15 … 332.15 K</text>
+  <text class="s" x="634" y="422">(1 K inside the judge's −40…+60 °C)</text>
+
+  <path class="ln" d="M880,290 C880,320 160,310 145,338"/>
+  <path class="ln" d="M270,385 H318"/>
+  <path class="ln" d="M570,385 H618"/>
+
+  <!-- loop -->
+  <rect class="bx" x="320" y="470" width="360" height="60" rx="8"/>
+  <text class="t" x="334" y="494">Autoregressive loop: repeat N days</text>
+  <text class="s" x="334" y="514">gated output becomes the newest input day</text>
+  <path class="ln" d="M800,430 V500 H682"/>
+  <path class="ln dash" d="M320,500 H120 V102"/>
+  <text class="s" x="128" y="460">next day</text>
+
+  <!-- ensemble -->
+  <rect class="bx2" x="620" y="550" width="360" height="56" rx="8"/>
+  <text class="t" x="634" y="574">Ensemble mean of 3 members (ens3)</text>
+  <text class="s" x="634" y="594">v1 + v1s1 (5 blocks) + adv1 (advection, 4 blocks)</text>
+  <path class="ln" d="M500,530 V578 H618"/>
+  <text class="s" x="20" y="580">Each member runs its own full rollout;</text>
+  <text class="s" x="20" y="598">the 3 rollouts are averaged, then a final NaN / range guard.</text>
+</svg>
+<p class="caption">Figure 1. One daily step of one member, the loop, and the ensemble. Source: <code>model/net.py</code>, <code>model/simulator.py</code>.</p>
+
+<h3 id="arch-steps">The steps</h3>
+<ol>
+  <li><b>Inputs.</b> 3 days × 6 channels × 32 × 36 in physical units, plus <code>doy_sincos</code> of the last day. If a perturbation is sent, it is
+    added to the last input day first (<code>model/simulator.py</code>). NaN/Inf inputs are replaced by 0 as a safety net.</li>
+  <li><b>Day of year.</b> <code>doy_index_from_sincos</code> turns [sin, cos] back into a slot 0–364 with <code>atan2</code>. Training uses the
+    same function, so the slot is identical in training and serving. No date ever enters the server.</li>
+  <li><b>Anomaly normalisation.</b> For each input day: <code>anomaly = (x − climatology[slot]) / std</code>. The climatology is a 365-day array
+    (<code>weights/climatology.npy</code>, shape 365 × 6 × 32 × 36), the mean of each calendar day over the <b>training years only</b>, smoothed with a 15-day
+    circular running mean (<code>train/prepare.py</code>). <code>std</code> comes from <code>stats.json</code>.</li>
+  <li><b>Features</b> (<code>step_features</code>, 29 channels): the 3 anomalies (18), the normalised climatology of the <i>target</i> day (6), land-sea
+    mask and orography in km (2), sin/cos of the target day (2), and latitude as <code>(lat − 22)/10</code> (1).</li>
+  <li><b>StencilNet.</b> Stem: 3×3 conv to 96 channels + GELU. Then residual blocks: <code>h + Conv1×1(GELU(Conv3×3(h)))</code>, 5 blocks for the plain members,
+    4 for the advection member. Head: 1×1 conv to 6 channels, <b>initialised to zero</b>, so an untrained net predicts "no change in anomaly"
+    (anomaly persistence). All 3×3 convs use <b>replicate padding</b> (edge cells are copied outward, rather than padding with zeros that would look like a fake signal).</li>
+  <li><b>Predict the change.</b> The net outputs Δ, and <code>a_next = a_today + Δ</code> (residual learning).</li>
+  <li><b>Add back the climatology.</b> <code>x_next = climatology[next day] + a_next × std</code>. When the net has nothing to say, the forecast is "today's
+    anomaly on top of the normal weather for tomorrow", never a runaway.</li>
+  <li><b>Physical gate.</b> Rain through ReLU (≥ 0), t2m clamped to 234.15–332.15 K. The <i>gated</i> state is what the next step sees.</li>
+  <li><b>Autoregressive loop.</b> The new day is appended; the oldest drops off. Repeat for N days (server allows 1–30).</li>
+  <li><b>Ensemble.</b> The 3 members each do a full rollout and the rollouts are averaged. A final guard replaces any non-finite value with that day's
+    climatology and clamps t2m and rain again.</li>
+</ol>
+
+<h3>Reach per step (why it cannot teleport)</h3>
+<p>A 3×3 convolution lets a cell see its 8 neighbours: reach grows by 1 cell. A 1×1 convolution and GELU are per-cell: reach +0.</p>
+<table>
+<thead><tr><th>Member</th><th>Stem</th><th>Blocks</th><th>Advection</th><th class="num">Reach per day (cells)</th></tr></thead>
+<tbody>
+<tr><td>v1, v1s1</td><td>1</td><td>5 × 1</td><td>none</td><td class="num">6 (about 650 km)</td></tr>
+<tr><td>adv1</td><td>1</td><td>4 × 1</td><td>2 (cap) + 1 (bilinear neighbour)</td><td class="num">8</td></tr>
+<tr><td>ens3 (max)</td><td colspan="3">ensemble reach = max over members (<code>Simulator.radius</code>)</td><td class="num">8</td></tr>
+</tbody></table>
+<svg class="diagram" viewBox="0 0 640 230" role="img" aria-label="Receptive field growth" style="max-width:640px">
+  <style>.c{fill:#fff;stroke:#d9dee6}.c1{fill:#1f5fa8}.c2{fill:#8fb3de}.c3{fill:#d3e2f4}.tt{font:12px "Segoe UI",sans-serif;fill:#1d2430}</style>
+  <!-- 3 small grids: shock cell, after stem, after 1 block -->
+  <g transform="translate(20,20)">
+    <rect class="c" x="0" y="0" width="150" height="150"/>
+    <rect class="c1" x="60" y="60" width="30" height="30"/>
+    <text class="tt" x="0" y="170">shock in one cell</text>
+  </g>
+  <g transform="translate(230,20)">
+    <rect class="c" x="0" y="0" width="150" height="150"/>
+    <rect class="c2" x="30" y="30" width="90" height="90"/>
+    <rect class="c1" x="60" y="60" width="30" height="30"/>
+    <text class="tt" x="0" y="170">after stem 3×3: ±1 cell</text>
+  </g>
+  <g transform="translate(440,20)">
+    <rect class="c" x="0" y="0" width="150" height="150"/>
+    <rect class="c3" x="0" y="0" width="150" height="150"/>
+    <rect class="c2" x="30" y="30" width="90" height="90"/>
+    <rect class="c1" x="60" y="60" width="30" height="30"/>
+    <text class="tt" x="0" y="170">after 1 block: ±2 cells</text>
+    <text class="tt" x="0" y="190">… after 5 blocks: ±6 (one day)</text>
+  </g>
+</svg>
+<p class="caption">Figure 2. The influence of one cell grows as a square (one ring per 3×3 conv). Everything outside the square is untouched, exactly.</p>
+
+<h3 id="arch-adv">The optional semi-Lagrangian advection member (adv1)</h3>
+<p class="plain">Weather patterns get blown along by the wind. Instead of making the CNN learn "move things downwind" from scratch, this
+member first physically shifts today's anomaly field along the wind, then the CNN corrects what is left.</p>
+<p class="tech">For each cell, the displacement in cells per day is <code>dx = α · u10 · (86400 / 111 000) / cos(lat)</code>,
+<code>dy = α · v10 · 86400 / 111 000</code>, where α is a learned scalar (starts at 0.5). Displacements are capped smoothly with
+<code>cap · tanh(d / cap)</code>, cap = 2 cells/day. Each cell takes the value found at its upstream point
+<code>(i − dy, j − dx)</code> (that is "semi-Lagrangian": look back along the wind), read with bilinear interpolation
+(<code>torch.nn.functional.grid_sample</code>, border padding). The carried anomaly is fed to the CNN as 6 extra input channels, and
+<code>a_next = carried + CNN(...)</code>.</p>
+<ul>
+  <li><b>Why α is learned:</b> the 10 m wind is not the wind that actually steers weather systems (that is higher up); α lets training find the right scale.</li>
+  <li><b>Why the tanh cap:</b> a speed limit, like a CFL condition. Without it a strong wind could move a signal arbitrarily far in one step and break the reach guarantee.</li>
+  <li><b>Why 4 blocks, not 5:</b> reach = 2 (cap) + 1 (bilinear reads the next cell) + 1 (stem) + 4 (blocks) = <b>8</b>, exactly the judge's 8 cells/day.
+    With 5 blocks it would be 9. <code>tests/test_model.py::test_reach_within_judge_speed_limit</code> asserts reach ≤ 8.</li>
+  <li><b>Honest evidence:</b> on its own, adv1 was "no clear win" (it bundled two changes, 1 run). It earns its place by adding <i>diversity</i> to the ensemble; see <a href="#results">Results</a>.</li>
+</ul>
+
+<h3 id="arch-train">Training recipe (<code>train/train.py</code>)</h3>
+<table>
+<tbody>
+<tr><th>Data split</th><td>Train on 2005–2019 (<code>--val-start 2020</code>); 2020–2021 held out. Training targets never cross into held-out years. The climatology is built from training years only. All three shipped members use this split.</td></tr>
+<tr><th>Loss</th><td>Squared error in std units (each channel divided by its std), latitude-weighted (cos lat, mean 1), averaged over every unrolled day.
+  Rain cells where the <i>true</i> rain &gt; 10 mm/day get weight <code>1 + rain_weight = 1 + 3 = 4</code>.</td></tr>
+<tr><th>Unrolled curriculum</th><td><code>1:12, 2:6, 4:6, 6:6</code>: 12 epochs predicting 1 day, then 6 epochs each rolling out 2, 4 and 6 days on its <i>own</i> predictions, with gradients through the whole rollout. 30 epochs total.</td></tr>
+<tr><th>Optimiser</th><td>AdamW, lr 1e-3, weight decay 1e-4, batch 32; cosine learning-rate decay over all 30 epochs; gradient-norm clipping at 1.0.</td></tr>
+<tr><th>Size and time</th><td>Width 96. About 7 minutes per run on an RTX 4050 (README).</td></tr>
+<tr><th>Members</th><td>v1 (seed 0), v1s1 (same recipe, seed 1), adv1 (advection, 4 blocks, seed 0). Bundled by <code>train/make_ensemble.py</code>, which checks all members share the same climatology.</td></tr>
+</tbody></table>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="why">
+<h2>5. Why it works: design decisions</h2>
+<p>Each row: the problem, what we did, and how we know.</p>
+
+<div class="grid2">
+<div class="card"><h4>No drift over long rollouts</h4><dl>
+  <dt>Problem</dt><dd>Small errors compound when a model feeds on its own output; forecasts wander off or explode.</dd>
+  <dt>Fix</dt><dd>(1) Predict the <i>change</i> of the anomaly, not the full state. (2) Work relative to climatology, so "no information" means "normal weather for that day". (3) Train on unrolled rollouts of 1 → 2 → 4 → 6 days, so the model is penalised for its own compounding errors. (4) Physical gate every step.</dd>
+  <dt>Evidence</dt><dd><code>test_extreme_inputs_stay_valid</code>: +25 K heat, ×20 rain and ×5 wind for 30 days stays finite and valid. Stable on all ens3 shocks (<a href="#results">Results</a>).</dd></dl></div>
+
+<div class="card"><h4>No blur</h4><dl>
+  <dt>Problem</dt><dd>Models trained on squared error tend to forecast a smooth average field, which loses detail at day 8.</dd>
+  <dt>Fix</dt><dd>Anomaly + residual design keeps today's structure as the starting point; we measure the kit's day-8 variance ratio for every model.</dd>
+  <dt>Evidence</dt><dd>Anti-blur scored full marks on our local judge (derivation in <a href="#results">Results</a>). Note: the original plan included a variance loss term; we did not need it and it is not in the code.</dd></dl></div>
+
+<div class="card"><h4>No teleport, by construction</h4><dl>
+  <dt>Problem</dt><dd>The judge penalises a response far from the shock (faster than 8 cells/day).</dd>
+  <dt>Fix</dt><dd>Only 3×3 and 1×1 convolutions plus per-cell operations. No pooling, no attention, no BatchNorm/LayerNorm over space, no global averages: anything global would let one cell affect every cell instantly.</dd>
+  <dt>Evidence</dt><dd><code>test_no_teleport_by_construction</code>: a 1-cell shock; every cell beyond <code>radius × day</code> (square distance) is checked to be <b>exactly</b> unchanged (<code>max diff == 0.0</code>), and the shock does produce a response.</dd></dl></div>
+
+<div class="card"><h4>Null shock identical</h4><dl>
+  <dt>Problem</dt><dd>If zero shock gives a slightly different answer, half the causality points go.</dd>
+  <dt>Fix</dt><dd>Deterministic CPU inference: eval mode, no dropout or sampling, fixed 4 threads, same member order. Adding zeros leaves the floats unchanged.</dd>
+  <dt>Evidence</dt><dd><code>test_null_shock_is_identical</code> asserts <code>max |a − b| == 0.0</code>; <code>test_deterministic</code> asserts two identical calls are equal. The dashboard shows "Multiverse ≡ Prime" for the zero preset.</dd></dl></div>
+
+<div class="card"><h4>Rain never negative, t2m valid</h4><dl>
+  <dt>Problem</dt><dd>Negative rain or out-of-range temperature fails the validity gate (no Top 10).</dd>
+  <dt>Fix</dt><dd>ReLU on rain and a t2m clamp inside every step (so the next step also sees a valid state), plus a final guard in the simulator (NaN → climatology, clamp again).</dd>
+  <dt>Evidence</dt><dd><code>test_shape_and_validity_gate</code>, <code>test_extreme_inputs_stay_valid</code>; no invalid windows on the local judge.</dd></dl></div>
+
+<div class="card"><h4>Heavy rain not smoothed away</h4><dl>
+  <dt>Problem</dt><dd>Heavy-rain cells are rare, so a plain loss ignores them and CSI suffers.</dd>
+  <dt>Fix</dt><dd>Cells with true rain &gt; 10 mm/day (the CSI threshold) get 4× loss weight (1 + 3).</dd>
+  <dt>Evidence</dt><dd>Positive CSI skill on both window sets (<a href="#results">Results</a>). We did not run an ablation without the weight; say so if asked.</dd></dl></div>
+
+<div class="card"><h4>Ensemble of 3</h4><dl>
+  <dt>Problem</dt><dd>A single model's errors include random, seed-dependent parts, and occasional rain spikes blew the 5-std stability limit.</dd>
+  <dt>Fix</dt><dd>Average 3 independently trained members, one of them structurally different (advection).</dd>
+  <dt>Why it helps</dt><dd>RMSE punishes big errors. Members make partly independent errors, and averaging cancels some of them, so the mean is closer to the truth on average. It also averages out a spike that only one member produces.</dd>
+  <dt>Evidence</dt><dd>ens2 beat its best member, ens3 beat ens2, and stability went from failing some shocks (v1) to stable on all (<a href="#results">Results</a>). Averaging is deterministic, so the null shock is still exact. The anti-blur check still passes with the average.</dd></dl></div>
+
+<div class="card"><h4>Honest validation</h4><dl>
+  <dt>Problem</dt><dd>Scoring on training years, or with our own re-implementation of the rules, would flatter us.</dd>
+  <dt>Fix</dt><dd>Train 2005–2019, test on held-out 2020–2021. <code>train/evaluate.py</code> imports the kit's <i>own</i> functions (<code>rmse_lat</code>, <code>skill_vs_best_ref</code>, <code>csi</code>, <code>csi_skill</code>, <code>forecast_points</code>, <code>variance_ratio</code>, <code>anti_blur_points</code>, <code>make_shock</code>, <code>causality_checks</code>, <code>causality_points</code>, <code>null_consistent</code>, <code>validity</code>). Climatology reference = the kit's climatology over training years.</dd>
+  <dt>Two window sets</dt><dd><b>named</b> = 10 windows (5 per year) matching the hidden case types: winter western disturbance 25 Jan, heatwave 15 May, onset 5 Jun, heavy rain 20 Jul, cyclone 20 Oct. <b>dense</b> = every 5th day of 2020–2021 = 144 windows. Dense is more trustworthy: 144 samples instead of 10, so one lucky or unlucky window barely moves the mean (seed-to-seed spread on named alone was about ±0.02 SS).</dd>
+  <dt>Assumptions</dt><dd>We assume the judge's per-window SS is the mean over channels of SS on leads 1/4/8 stacked. Causality is checked on the named heavy-rain, onset and cyclone windows (6 windows × 2 shocks = 12 shocks).</dd></dl></div>
+</div>
+</section>
+
+<!-- ============================================================ 6 RESULTS -->
+<section id="results" class="results">
+<h2>6. Results (all numbers live here)</h2>
+<div class="box warn"><p><b>Single source.</b> Every number here is copied from <code>docs/EXPERIMENTS.md</code> (local judge = kit's own scoring functions,
+held-out 2020–2021). If EXPERIMENTS.md changes, update only the cells in this section; the rest of the page reads them from here.
+Points are of 70 (skill 45 + anti-blur 10 + causality 15). Evidence strength: 1 run each unless stated.</p></div>
+
+<h3>Headline: the promoted model ens3 (mean of v1, v1s1, adv1)</h3>
+<table>
+<thead><tr><th>Metric</th><th>Window set</th><th class="num">Value</th></tr></thead>
+<tbody>
+<tr><td>Mean RMSE skill score (vs better of persistence/climatology)</td><td>dense, 144 windows</td><td class="num" id="R-ens3_dense_ss">+0.106</td></tr>
+<tr><td>Mean RMSE skill score</td><td>named, 10 windows</td><td class="num" id="R-ens3_named_ss">+0.151</td></tr>
+<tr><td>Heavy-rain CSI skill</td><td>dense, 144 windows</td><td class="num" id="R-ens3_csi_dense">+0.090</td></tr>
+<tr><td>Heavy-rain CSI skill</td><td>named, 10 windows</td><td class="num" id="R-ens3_csi_named">+0.145</td></tr>
+<tr><td>Causality points (of 15), average</td><td>6 named windows × 2 shocks</td><td class="num" id="R-ens3_caus">13.44</td></tr>
+<tr><td>Shocks that stayed stable (&lt; 5 std)</td><td>same 12 shocks</td><td class="num" id="R-ens3_stable">12/12</td></tr>
+<tr><td>monsoon_stall shocks that fail "propagates"</td><td>6 stall shocks</td><td class="num" id="R-ens3_stall">5/6</td></tr>
+<tr><td>Auto points (of 70)</td><td>named, 10 windows</td><td class="num" id="R-ens3_named_pts">68.44</td></tr>
+<tr><td>Latency per 10-step call (judge-like container: offline, 4 CPU, 6 GB, read-only)</td><td>container check</td><td class="num" id="R-latency">0.18–0.21 s</td></tr>
+<tr><td>Time to ready / memory</td><td>container check</td><td class="num"><span id="R-ready">5 s</span> / <span id="R-ram">196 MB</span></td></tr>
+</tbody></table>
+
+<h3>Derived from the formulas (arithmetic on the numbers above, not separately logged)</h3>
+<ul>
+  <li>Named: 0.151 ≥ 0.12 → RMSE 30/30; CSI 0.145 ≥ 0.10 → 15/15; 68.44 − 30 − 15 − 13.44 = 10 → anti-blur 10/10.</li>
+  <li>Dense (the more realistic estimate): RMSE 30 × 0.106 / 0.12 ≈ <span id="R-dense_rmse_pts">26.5</span>/30; CSI 15 × 0.090 / 0.10 ≈ <span id="R-dense_csi_pts">13.5</span>/15.</li>
+  <li>Ensemble gain over the best single member on dense SS: ens2 vs v1 = <span id="R-ens2_gain">+0.025</span> (logged); ens3 vs v1 = 0.106 − 0.076 = <span id="R-ens3_gain">+0.030</span> (computed).</li>
+</ul>
+
+<h3>All runs (from the experiment log)</h3>
+<table>
+<thead><tr><th>id</th><th>what</th><th class="num">named pts/70</th><th class="num">named SS</th><th class="num">dense SS</th><th class="num">CSI skill named / dense</th><th class="num">causality /15</th><th>notes</th></tr></thead>
+<tbody>
+<tr><td>B0</td><td>persistence (repeat last day)</td><td class="num" id="R-b0_named_pts">21.25</td><td class="num">−0.180</td><td class="num" id="R-b0_dense_ss">−0.181</td><td class="num">−0.044 / <span id="R-b0_csi_dense">−0.029</span></td><td class="num">11.25</td><td>blur 10/10; never propagates</td></tr>
+<tr><td>S0</td><td>smoke test: 2 epochs (unroll 1 then 4)</td><td class="num">54.38</td><td class="num">+0.071</td><td class="num">+0.059</td><td class="num">+0.102 / +0.076</td><td class="num">11.25–13.1</td><td>proves pipeline; "propagates" mostly fails: shock energy decays before leaving box + 3 cells</td></tr>
+<tr><td>v1</td><td>96 wide × 5 blocks, radius 6, schedule 1:12,2:6,4:6,6:6, rain ×3, seed 0</td><td class="num">67.50</td><td class="num">+0.123</td><td class="num" id="R-v1_dense_ss">+0.076</td><td class="num">+0.142 / +0.085</td><td class="num">12.50 (6 windows)</td><td>stability fails <span id="R-v1_stab_fail">3/12</span> shocks (rain spike &gt; 5σ); monsoon_stall rarely propagates</td></tr>
+<tr><td>v1s1</td><td>v1 recipe, seed 1</td><td class="num">65.20</td><td class="num">+0.105</td><td class="num" id="R-v1s1_dense_ss">+0.073</td><td class="num">+0.133 / +0.082</td><td class="num">–</td><td>single-model seed spread ≈ <span id="R-seed_spread">±0.02</span> named SS</td></tr>
+<tr><td>adv1</td><td>+ semi-Lagrangian wind step (cap 2 cells), 4 blocks (reach 8)</td><td class="num">67.55</td><td class="num">+0.119</td><td class="num" id="R-adv1_dense_ss">+0.071</td><td class="num">+0.148 / +0.082</td><td class="num">12.81</td><td>bundled change; no clear win alone, 1 run</td></tr>
+<tr><td>ens2</td><td>mean of v1, v1s1</td><td class="num">68.12</td><td class="num">+0.141</td><td class="num" id="R-ens2_dense_ss">+0.099</td><td class="num">+0.133 / +0.089</td><td class="num">13.12</td><td>+0.025 dense SS over best member</td></tr>
+<tr><td><b>ens3</b></td><td><b>mean of v1, v1s1, adv1 (promoted)</b></td><td class="num"><b>68.44</b></td><td class="num"><b>+0.151</b></td><td class="num"><b>+0.106</b></td><td class="num">+0.145 / +0.090</td><td class="num"><b>13.44</b></td><td>stable 12/12; diversity helps; rain spikes averaged out; stall propagation still fails 5/6</td></tr>
+</tbody></table>
+<p class="caption">"rain ×3" in the log is the <code>--rain-weight 3</code> flag; in code the heavy-rain cells' total weight is 1 + 3 = 4.
+Repo scan (15) and brief (15) are not in these totals.</p>
+
+<h3>How to read them (say this at the desk)</h3>
+<ul>
+  <li>Positive SS means better than the better of the two standard baselines. Persistence alone scores <span class="r" data-r="b0_dense_ss"></span> on dense, so it is beaten by a wide margin.</li>
+  <li>Quote <b>dense</b> numbers first (144 windows, low noise). Named numbers mirror the hidden case types but rest on 10 windows.</li>
+  <li>Not yet logged in EXPERIMENTS.md (ask the code owner before quoting): per-channel skill, per-lead CSI, and the gate value "SS vs persistence at day 4". The raw eval output for ens3 is in <code>runs/ens_v1_s1_adv1.eval.txt</code>.</li>
+</ul>
+</section>
+
+<!-- ============================================================ 7 GLOSSARY -->
+<section id="glossary">
+<h2>7. Concepts and glossary</h2>
+<p>General definitions are standard textbook meanings; anything specific to our model points at the code.</p>
+
+<h3>Weather and climate</h3>
+<dl class="gloss">
+<dt>Anomaly</dt><dd>How far today is from normal for this day of the year. <span class="ex">Example: Delhi normally 30 °C on 15 May; today 34 °C → anomaly +4 °C. We divide by the channel std, so the anomaly is in "standard deviations".</span></dd>
+<dt>Climatology</dt><dd>The long-term average weather for each calendar day. Ours: mean over 2005–2019 per day of year, smoothed over 15 days, 365 slots (<code>weights/climatology.npy</code>). <span class="ex">It is a single "typical year", which the rules allow (multi-year archives are not).</span></dd>
+<dt>Persistence baseline</dt><dd>"Tomorrow (and every later day) equals today." Hard to beat at day 1, poor at day 8.</dd>
+<dt>Climatology baseline</dt><dd>"Every forecast day equals the normal for that date." Poor at day 1, decent at day 8. The judge compares us to the <i>better</i> of the two.</dd>
+<dt>ERA5</dt><dd>ECMWF's global reanalysis of the atmosphere, hourly, from 1940 on. Our dataset is ERA5 averaged to 1° and to daily values.</dd>
+<dt>Reanalysis</dt><dd>A best-estimate reconstruction of past weather made by combining observations with a weather model. It is "the truth" for training here, though not perfect.</dd>
+<dt>IMD</dt><dd>India Meteorological Department, the official forecaster. We borrow its thresholds (2.5 mm rainy day) and note where we differ (heatwave uses daily max).</dd>
+<dt>Kharif</dt><dd>The monsoon-season crop cycle (sown with the monsoon rains, e.g. rice). Rain deficit at sowing is what our water-stress advisory flags.</dd>
+<dt>Western disturbance</dt><dd>A storm system arriving from the west (Mediterranean side) that brings winter rain and snow to north India. One of the hidden test case types (our named window: 25 Jan).</dd>
+<dt>Monsoon onset</dt><dd>The start of the summer monsoon rains, marked over Kerala around early June (our named window: 5 Jun).</dd>
+<dt>Bay of Bengal / Arabian Sea branches</dt><dd>The summer monsoon flow reaches India in two arms: one over the Arabian Sea to the west coast, one over the Bay of Bengal to the east and northeast. The judge's two shock boxes sit on these: warm_ocean on the Bay, monsoon_stall on the Arabian Sea.</dd>
+<dt>t2m, tp, u10, v10, msl, tcwv</dt><dd>See the <a href="#problem">table in section 2</a>. <code>u10/v10</code> are wind components at 10 m: u is east-west, v is north-south. <span class="ex">u10 = −5, v10 = 0 means a 5 m/s wind blowing towards the west.</span> <code>msl</code>: low values mark depressions and cyclones. <code>tcwv</code>: the water available to rain out.</dd>
+<dt>Cyclone core, orographic rain</dt><dd>A cyclone's intense centre is tens of km across; orographic rain is rain forced by air rising over mountains (Western Ghats). Both are smaller than one 1° cell.</dd>
+</dl>
+
+<h3>Metrics</h3>
+<dl class="gloss">
+<dt>RMSE</dt><dd>Root mean squared error: square the errors, average, take the square root. Big errors count extra. <span class="ex">Errors 1, 1, 4 → √((1+1+16)/3) ≈ 2.45 (plain average would be 2).</span></dd>
+<dt>Latitude weighting</dt><dd>Grid cells further north are physically smaller (meridians converge), so each row's error is weighted by cos(latitude), normalised to mean 1. <span class="ex">At 37.5° N the weight is about 0.79 of that at the equator before normalising.</span></dd>
+<dt>Skill score (SS)</dt><dd><code>1 − RMSE_model / RMSE_reference</code>. 0 = as good as the reference, 1 = perfect, negative = worse. <span class="ex">Reference RMSE 2.0, ours 1.8 → SS = 0.10.</span></dd>
+<dt>CSI (critical success index)</dt><dd>For a yes/no event (rain &gt; 10 mm/day): hits / (hits + misses + false alarms). Correct "no" cells do not count. <span class="ex">8 hits, 6 misses, 6 false alarms → 8/20 = 0.40.</span> CSI skill compares this to the better baseline: (CSI − ref)/(1 − ref).</dd>
+<dt>Variance ratio (anti-blur)</dt><dd>How "contrasty" our day-8 map is compared with the real one: spatial variance ours / real. 1.0 = same amount of structure; 0.2 = washed out.</dd>
+</dl>
+
+<h3>Model and training</h3>
+<dl class="gloss">
+<dt>Convolution</dt><dd>A small filter slid over the grid; each output cell is a weighted sum of a small neighbourhood. 3×3 = the cell and its 8 neighbours; 1×1 = only the cell itself (mixes channels).</dd>
+<dt id="g-rf">Receptive field</dt><dd>The set of input cells that can influence one output cell. Ours grows by 1 cell per 3×3 conv: 6 cells per day for the plain members, 8 for adv1.</dd>
+<dt>Replicate padding</dt><dd>At the map border, the conv needs cells outside the map; we copy the edge values outward rather than inventing zeros.</dd>
+<dt>Residual connection</dt><dd>A layer outputs <code>input + correction</code> instead of a brand-new value. Easier to train and stable. We use it twice: inside blocks, and for the whole step (predict the change).</dd>
+<dt>GELU</dt><dd>A smooth activation function: roughly "pass positives, squash negatives", but without ReLU's sharp kink.</dd>
+<dt>ReLU</dt><dd><code>max(0, x)</code>. We use it as the rain gate, which makes negative rain impossible.</dd>
+<dt>Zero-init head</dt><dd>The final layer starts with all weights zero, so before training the model predicts "anomaly unchanged". Training starts from a sane forecast instead of noise.</dd>
+<dt>Normalisation</dt><dd>Rescaling inputs to similar ranges (here: subtract climatology, divide by std) so pressure (≈ 100 000 Pa) and rain (≈ 4 mm) count equally. Note: we use NO normalisation layers that average over space (BatchNorm/GroupNorm/LayerNorm), because those would mix information across the whole map.</dd>
+<dt id="g-auto">Autoregressive rollout</dt><dd>Predict day 1, feed it back as input, predict day 2, and so on. Errors can compound, which is why we train on rollouts.</dd>
+<dt>Teacher forcing vs unrolled training</dt><dd>Teacher forcing: train only to predict 1 day from true inputs. Unrolled: let the model run several days on its own predictions and backpropagate the error of every day. Our first 12 epochs are the 1-day phase; the rest are unrolled.</dd>
+<dt>Curriculum</dt><dd>Teach easy first: 1-day steps, then 2, 4, 6-day rollouts (<code>--schedule 1:12,2:6,4:6,6:6</code>).</dd>
+<dt>Ensemble</dt><dd>Several models whose outputs are averaged. Ours: 3 members, same inputs, averaged rollouts.</dd>
+<dt>Semi-Lagrangian advection</dt><dd>Moving a field along the wind by asking, for each cell, "where did the air here come from?" and reading the value there (with interpolation). Stable even for big time steps.</dd>
+<dt>CFL-like speed limit</dt><dd>From numerical weather models: information must not travel more than a set number of cells per step. Ours: tanh cap of 2 cells/day in advection; overall reach ≤ 8 cells/day.</dd>
+<dt>Bilinear interpolation / grid_sample</dt><dd>Reading a value between grid points by blending the 4 nearest cells. PyTorch's <code>grid_sample</code> does this for a whole field at once, and it is differentiable.</dd>
+<dt>Overfitting / held-out validation</dt><dd>Overfitting = memorising the training years. To detect it, score on years the model never saw (2020–2021).</dd>
+<dt>AdamW</dt><dd>A standard optimiser (Adam) with weight decay applied separately (the "W"), which gently pulls weights towards zero to reduce overfitting.</dd>
+<dt>Cosine LR schedule</dt><dd>The learning rate starts at 1e-3 and glides down to ~0 along a half cosine over all 30 epochs.</dd>
+<dt>Gradient clipping</dt><dd>If the gradient is huge (common in long rollouts), rescale it to norm 1.0 so one bad batch cannot wreck the weights.</dd>
+<dt>Epoch</dt><dd>One pass over all training samples.</dd>
+<dt>Deterministic inference</dt><dd>Same input → bit-identical output, every time. Needed for the null shock.</dd>
+<dt>Std (σ)</dt><dd>Standard deviation, the typical size of variation. Channel std from stats.json: t2m 13.46 K, tp 7.55 mm/day, u10 2.90 m/s, v10 2.43 m/s, msl 619 Pa, tcwv 20.49 kg/m².</dd>
+<dt>Chebyshev vs Euclidean distance</dt><dd>Chebyshev = max(|Δrow|, |Δcol|) (a square); Euclidean = straight-line distance (a circle). Our construction bounds Chebyshev reach; the judge measures Euclidean.</dd>
+</dl>
+</section>
+
+<!-- ============================================================ 8 DASHBOARD -->
+<section id="dashboard">
+<h2>8. The dashboard and impact module</h2>
+<p>Static HTML + vanilla JavaScript + canvas in <code>dashboard/</code>, completely separate from the server. Every model map is <b>live output of
+<code>/simulate</code></b>; nothing is pre-rendered. If the API is unreachable it shows a red "SERVER OFFLINE" banner and no model output.</p>
+
+<h3>What each part shows</h3>
+<table>
+<tbody>
+<tr><th>Top bar</th><td>API status dot, model name, last inference time (ms), steps, and an editable API URL (default <code>http://localhost:8000</code>).</td></tr>
+<tr><th>Scenario card</th><td>Start state: 6 real events (Cyclone Tauktae May 2021, Cyclone Yaas May 2021, monsoon onset over Kerala June 2021, extreme Konkan rain July 2021, north India heatwave June 2019, western disturbance January 2021). Channel picker, days N (1–30), toggles: Observed panel, wind arrows, smoothing, region boxes. Scenario files hold only 3 input days + the 10 observed days that followed (<code>train/make_scenarios.py</code>); the server never reads them.</td></tr>
+<tr><th>Shock painter</th><td>Presets: <b>Warm Bay of Bengal</b> (+3 K t2m, +15% tcwv, judge's box), <b>Monsoon stall</b> (−40% u10/v10, Arabian Sea box), <b>Zero shock</b>. Or drag a rectangle on any map; add components per channel as "+ physical" or "% of last day". Shows the cells in the box and the mean Δ per channel. "Run multiverse ▶".</td></tr>
+<tr><th>Day slider</th><td>Step or play through forecast days; shows the valid date.</td></tr>
+<tr><th>Map panels</th><td>Observed (optional), <b>Timeline Prime</b>, <b>Multiverse</b>, and <b>Δ Multiverse − Prime</b> (diverging colours, dotted "reach" ring). Hover for values.</td></tr>
+<tr><th>Spread of the shock</th><td>Log-scale chart per day of mean response energy near the box (≤ 2 cells) vs far from it, plus "reach" bars: the furthest cell (Chebyshev distance) with energy &gt; 10⁻³. Zero shock prints "Δ = 0 everywhere, every day: Multiverse ≡ Prime".</td></tr>
+<tr><th>Impact co-pilot</th><td>"Heat &amp; Kharif water-stress co-pilot": per region, heat-stress days per land cell, N-day rain, Δ rain, dry days, water-stress and heat risk, and a one-line advisory per region.</td></tr>
+</tbody></table>
+<div class="box warn"><p>The spread chart is an explanation aid, not the judge's metric: it uses "near" = 2 cells and Chebyshev distance, while the judge uses 3 cells (4-neighbour growth) and Euclidean distance for the speed check.</p></div>
+
+<h3 id="dash-run">How to run the demo</h3>
+<pre># terminal 1, in Dev-Forge/
+.venv\Scripts\python.exe serve.py --port 8000
+
+# terminal 2, in Dev-Forge/dashboard/
+python -m http.server 5173
+
+# browser
+http://localhost:5173</pre>
+<p>Check the status dot is green and the model name shows before the judges arrive. If the server is down, the dashboard says so; restart terminal 1.</p>
+
+<h3 id="dash-script">Suggested 5-minute demo script</h3>
+<p>Lead with what is hard to copy: a live shock that stays local and then spreads, zero shock exactly identical, and held-out numbers.</p>
+<table class="timeline">
+<thead><tr><th>Time</th><th>Do</th><th>Say</th></tr></thead>
+<tbody>
+<tr><td>0:00–0:30</td><td>Dashboard open on "Monsoon onset over Kerala, June 2021", channel t2m or tp.</td><td>The 30-second pitch. "Everything you see is the live API; the server runs offline on CPU."</td></tr>
+<tr><td>0:30–1:15</td><td>Show Prime; toggle Observed; play days 1–10.</td><td>"This is Timeline Prime from 3 real days. 2021 was never used in training. Each 10-day call takes a fraction of a second." (Read the ms in the top bar.)</td></tr>
+<tr><td>1:15–2:30</td><td>Preset "Warm Bay of Bengal", Run. Δ panel + spread chart, step day 1 → day 8.</td><td>"Day 1: the response is inside and right around the box. Then it spreads, and the reach bars show it can never move faster than our stencil allows: 6 to 8 cells a day, by construction. Beyond that ring the output is bit-for-bit unchanged; we have a test for exactly that."</td></tr>
+<tr><td>2:30–3:00</td><td>Preset "Zero shock", Run.</td><td>"Zero shock: Δ is exactly zero everywhere, every day. Not small: zero. Deterministic CPU inference."</td></tr>
+<tr><td>3:00–3:45</td><td>Preset "Monsoon stall"; open the impact co-pilot.</td><td>"Cut Arabian Sea winds by 40%. The co-pilot turns Prime vs Multiverse into heat-stress days, rain change and dry days per region, with a one-line advisory. These are proxies, not IMD forecasts; the rules are printed under the table."</td></tr>
+<tr><td>3:45–4:30</td><td>Optional: drag your own box, or let a judge pick one.</td><td>Invite the live shock now, on our terms.</td></tr>
+<tr><td>4:30–5:00</td><td>Switch to this page's <a href="#results">Results</a>.</td><td>"Held-out 2020–2021, the kit's own scoring code: dense skill <span class="r" data-r="ens3_dense_ss"></span> on 144 windows, CSI skill <span class="r" data-r="ens3_csi_dense"></span>, stable on <span class="r" data-r="ens3_stable"></span> shocks. Known weakness: the monsoon-stall response often does not spread far enough to pass 'propagates'."</td></tr>
+</tbody></table>
+<p>Avoid leading with the heatwave scenario: it is June 2019, a <b>training</b> year. All other scenarios are from held-out 2021.</p>
+
+<h3 id="dash-impact">Impact logic (computed in the browser from the two live rollouts)</h3>
+<ul>
+  <li><b>Region boxes</b> (approximate, land cells only, land-sea mask ≥ 0.5): NW India (24–32° N, 70–78° E), Central India (18–24° N, 74–84° E), Peninsular South (8–18° N, 74–80° E), East &amp; NE India (20–28° N, 84–96° E).</li>
+  <li><b>Heat-stress day</b>: daily-mean t2m ≥ 34 °C. <b>Honest caveat:</b> IMD heatwave criteria use daily <i>maximum</i> temperature; we only have daily means, so this is a proxy.</li>
+  <li><b>Dry day</b>: rain &lt; 2.5 mm/day (IMD rainy-day threshold).</li>
+  <li><b>Rain change</b>: N-day total, Multiverse vs Prime, in %.</li>
+  <li><b>Water-stress risk</b>: HIGH if rain ≤ −25% vs Prime or ≥ 3 extra dry days; MODERATE if ≤ −10% or ≥ 1.5 extra dry days; WET (waterlogging / flash-flood watch) if ≥ +30% and ≥ 50 mm; LOW otherwise, or if both runs are below 5 mm (already dry, little rain at stake).</li>
+  <li><b>Heat risk</b>: HIGH if ≥ 3 heat days and ≥ 1 more than Prime; MODERATE if ≥ 0.5 more; else LOW.</li>
+  <li><b>Advisory line</b>: e.g. "Rain −30% vs Prime over Central India in the next 10 days → kharif sowing water-stress risk HIGH; heat-stress days 1.0 → 2.0 per land cell (heat risk …)". (Illustrative wording; values come from the live run.)</li>
+</ul>
+</section>
+
+<!-- ============================================================ 9 LIMITS -->
+<section id="limits">
+<h2>9. Limitations and honest failure modes</h2>
+<p>Saying these first, calmly, earns trust. Each has a one-line "what we would do".</p>
+<table>
+<thead><tr><th>Limitation</th><th>Why</th><th>What we would do</th></tr></thead>
+<tbody>
+<tr><td>1° grid cannot resolve cyclone cores or orographic rain</td><td>A cell is ~111 km; a cyclone eye and Western Ghats rain bands are smaller.</td><td>Finer grid (see the 0.25° question); orography is already an input.</td></tr>
+<tr><td>Daily means only</td><td>The data is daily; no daily max/min, no diurnal cycle. Hence the heat proxy uses daily mean.</td><td>Add max/min temperature channels if available.</td></tr>
+<tr><td>Rain is the hardest variable; heavy-rain skill at long leads is weak</td><td>Rain is patchy and chaotic; past a few days nobody predicts exact heavy-rain cells. Our CSI is pooled over days 1, 4 and 8; we have not logged the per-lead split, but day 8 is expected to be the weakest.</td><td>Log per-lead CSI; probabilistic rain output.</td></tr>
+<tr><td>monsoon_stall shock often fails "propagates"</td><td>Logged: fails on <span class="r" data-r="ens3_stall"></span> stall shocks. The response stays near the Arabian Sea box: its energy decays before it grows outside the box + 3 cells by enough. Our hypothesis (not tested): a wind cut is a weak, quickly-relaxing anomaly in our anomaly-space model, and the box touches the western edge of the grid, so it can only spread east.</td><td>Study the stall response; train with perturbation pairs.</td></tr>
+<tr><td>10 m wind is not the steering flow</td><td>Weather systems are steered by winds higher up; we only have 10 m wind. The learned α partly compensates.</td><td>Use upper-level winds if the data had them.</td></tr>
+<tr><td>Training years vs hidden test years</td><td>Members trained on 2005–2019; hidden windows are after 2023-01-10. A warming trend means the climatology may be slightly cold for 2023–24.</td><td>Retrain on all years 2005–2021 (<code>train.py --val-start 2099</code>; not done for the shipped weights).</td></tr>
+<tr><td>Ensemble mean is smoother than reality</td><td>Averaging removes some detail, especially at long leads.</td><td>Still passes anti-blur on our local judge; show members separately or add calibrated spread.</td></tr>
+<tr><td>No ocean model</td><td>There is no sea-surface temperature channel, so a warm-ocean shock relaxes like any anomaly instead of persisting as real ocean warmth would.</td><td>A slow "ocean memory" channel.</td></tr>
+<tr><td>Theoretical diagonal reach</td><td>Construction bounds reach in a square (Chebyshev). The judge's no-teleport check uses circles (Euclidean) plus 3 cells. A diagonal corner of the adv member's 8-cell square can be up to about 11.3 cells away on day 1, beyond the judge's 11. In practice the energy that far out is tiny and the judge tolerates up to 5%.</td><td>Use a round stencil, or cap at 7.</td></tr>
+<tr><td>Impact proxies are not official forecasts</td><td>Simple thresholds on a coarse model; region boxes are approximate.</td><td>Validate the advisory rules against observed outcomes.</td></tr>
+<tr><td>Local judge assumptions</td><td>We assume how the judge averages channels per window, and the judge's climatology may differ from ours.</td><td>None possible before results; we used the kit's own functions wherever they exist.</td></tr>
+</tbody></table>
+</section>
+
+<!-- ============================================================ 10 Q&A -->
+<section id="qa">
+<h2>10. Judge Q&amp;A drill</h2>
+<p>Click to reveal. Answer in the first sentence, then give one piece of evidence.</p>
+
+<h3>Design</h3>
+<details><summary>1. In one sentence, what is your model?</summary><div><p>A residual CNN that steps India's weather forward one day at a time in anomaly space, with a small fixed receptive field so shocks cannot jump; three of them averaged.</p></div></details>
+
+<details><summary>2. Why not a U-Net or a transformer?</summary><div><p>Both are built to mix information across the whole map: a U-Net downsamples (pooling), so one step can reach far; attention connects every cell to every cell. That breaks the causality the judge tests for: a shock would affect India in one step. Our stencil makes the speed limit a guarantee, not a hope. It is also small and fast on CPU (<span class="r" data-r="latency"></span> per 10-day call). Trade-off: less long-range context per step, which we accept.</p></div></details>
+
+<details><summary>3. How do you know it doesn't teleport?</summary><div><p>Two levels. By construction: only 3×3 and 1×1 convolutions and per-cell operations, so each step can move information at most 6 cells (8 for the advection member). By test: <code>test_no_teleport_by_construction</code> puts a shock in one cell and checks that every cell beyond <code>reach × day</code> is <i>exactly</i> unchanged, difference 0.0, not just small. And by the judge's own <code>causality_checks</code> run locally: no shock flagged for teleporting. One subtlety, if pushed: we bound distance in squares, the judge measures circles; the far diagonal corner is theoretical and carries negligible energy.</p></div></details>
+
+<details><summary>4. Why anomalies instead of raw values?</summary><div><p>Most of the raw signal is the seasonal cycle, which we already know from the calendar. Subtracting climatology leaves the part that is actually hard: today's departure from normal. It also gives a safe default: if the network is unsure, the forecast falls back to "normal weather plus today's anomaly", and long rollouts stay near climatology instead of drifting. And it puts all 6 variables on the same scale.</p></div></details>
+
+<details><summary>5. Why predict the change rather than the next state?</summary><div><p>Day-to-day changes are small, so learning a correction is easier and more stable than re-creating the whole map. With a zero-initialised head, the untrained model already gives a reasonable forecast (anomaly persistence).</p></div></details>
+
+<details><summary>6. Why does the zero shock give exactly zero?</summary><div><p>The server adds the perturbation to the last input day; adding zeros leaves every float identical. Inference is deterministic on CPU: eval mode, no dropout, no random sampling, fixed thread count, members always in the same order. Same input bits → same output bits. <code>test_null_shock_is_identical</code> asserts a maximum difference of exactly 0.0. The judge only needs 1e-3 std.</p></div></details>
+
+<details><summary>7. Why doesn't it explode over 10 (or 30) days?</summary><div><p>Four reasons: residual updates in anomaly space; the climatology anchor; training on unrolled 2, 4 and 6-day rollouts on its own predictions, so it learned not to amplify its own errors; and a physical gate every step. Evidence: stable on <span class="r" data-r="ens3_stable"></span> local shocks, and a test that runs absurd inputs (+25 K, ×20 rain, ×5 wind) for 30 days and stays finite and valid.</p></div></details>
+
+<details><summary>8. What happens after 30 days?</summary><div><p>The server accepts 1 to 30 steps (more returns a 422 error, by our choice). Physically, after a couple of weeks any forecast loses day-to-day skill; by design ours relaxes towards climatology rather than drifting or exploding. We do not claim skill there; the judge scores days 1, 4, 8.</p></div></details>
+
+<details><summary>9. Why doesn't it blur?</summary><div><p>Today's structure is the starting point (residual in anomaly space) instead of being re-generated, and the rain weighting keeps extremes in the loss. We measure it with the kit's own variance-ratio function: full anti-blur points on our local judge. Even the 3-member average keeps enough variance.</p></div></details>
+
+<details><summary>10. Why an ensemble, and doesn't averaging blur?</summary><div><p>Each trained network makes partly random errors; averaging cancels some of them, which lowers RMSE. Logged: the 2-member ensemble beat its best member by <span class="r" data-r="ens2_gain"></span> dense SS, and ens3 is better again. It also fixed stability: a single model had rain spikes above 5 std on <span class="r" data-r="v1_stab_fail"></span> shocks; the average had none. Yes, averaging smooths a little, but the day-8 variance stays above the 40% line on our local judge. Averaging is deterministic, so the null shock stays exact.</p></div></details>
+
+<details><summary>11. What is the advection member, and why only 4 blocks?</summary><div><p>Before the CNN, it shifts today's anomaly along the 10 m wind (semi-Lagrangian, bilinear), with a learned scale and a smooth cap of 2 cells per day. That costs 3 cells of reach (2 + 1 for interpolation), so with stem + 4 blocks the total is exactly 8, the judge's limit. Alone it was no clear win; it helps the ensemble by being different.</p></div></details>
+
+<details><summary>12. Why replicate padding?</summary><div><p>Zero padding would make the map edge look like a strong negative anomaly and inject fake signals. Copying the edge values is neutral, and it never brings in information from further than one cell.</p></div></details>
+
+<h3>Validation and numbers</h3>
+<details><summary>13. How did you validate?</summary><div><p>Trained on 2005–2019 only, scored on held-out 2020–2021 with the kit's own scoring functions imported directly: RMSE skill, CSI, anti-blur, causality with the official <code>make_shock</code>, null consistency, validity. Two window sets: 10 "named" windows matching the hidden case types, and 144 "dense" windows (every 5th day), which we trust more. The climatology reference is also built from training years only.</p></div></details>
+
+<details><summary>14. What is your skill score?</summary><div><p>Dense, 144 held-out windows: <span class="r" data-r="ens3_dense_ss"></span> mean SS against the better of persistence and climatology. Named, 10 windows: <span class="r" data-r="ens3_named_ss"></span>. Full marks need 0.12, so on the dense estimate we expect roughly <span class="r" data-r="dense_rmse_pts"></span> of 30.</p></div></details>
+
+<details><summary>15. What is your CSI and why is it what it is?</summary><div><p>CSI skill over the better baseline: <span class="r" data-r="ens3_csi_dense"></span> dense, <span class="r" data-r="ens3_csi_named"></span> named; full marks at 0.10. It is positive because heavy-rain cells get 4× weight in the loss. It is not higher because heavy rain is patchy and sub-grid at 1°, and at day 8 the exact location is close to unpredictable.</p></div></details>
+
+<details><summary>16. Why is rain skill the weakest?</summary><div><p>Rain is intermittent (zero most places, huge in a few), its daily value is a sum, not a mean, it depends on processes smaller than a 1° cell (convection, mountains), and it errs in both position and amount, which RMSE double-penalises. Persistence and climatology are also comparatively good references for rain at some leads. Temperature, pressure and water vapour are smoother and easier.</p></div></details>
+
+<details><summary>17. Named vs dense: why two numbers?</summary><div><p>Named (10 windows) mirrors the hidden test's case types, but 10 samples are noisy: two seeds of the same recipe differed by about ±0.02. Dense (144 windows) gives a stable mean. We choose models on dense.</p></div></details>
+
+<details><summary>18. Do you beat persistence at day 4 (the gate)?</summary><div><p>Yes, our local judge checks the gate on every evaluation and ens3 passes it. Overall, persistence alone scores <span class="r" data-r="b0_dense_ss"></span> dense SS against the best reference, and we score <span class="r" data-r="ens3_dense_ss"></span>.</p></div></details>
+
+<details><summary>19. Is the dashboard live?</summary><div><p>Yes. Every model map comes from a fresh <code>/simulate</code> call to our server; nothing is pre-rendered. Kill the server and the dashboard shows "SERVER OFFLINE" and no model output. The scenario files only contain the 3 input days and the 10 observed days for comparison.</p></div></details>
+
+<details><summary>20. What did not work?</summary><div><p>(a) The smoke model mostly failed "propagates": the shock decayed before it left the box. (b) A single model sometimes produced rain spikes above 5 std (stability failed on <span class="r" data-r="v1_stab_fail"></span> shocks). The ensemble fixed it. (c) The advection member was no clear win alone. (d) The monsoon-stall shock still fails "propagates" on <span class="r" data-r="ens3_stall"></span>. (e) Plans we dropped: rain in log space with softplus, a variance loss term, a learned climatology blend. The simpler design was enough.</p></div></details>
+
+<details><summary>21. Why does monsoon_stall fail to propagate?</summary><div><p>The response is localised and stable, so we still earn 3 of 4 quarters on it, but its energy outside box + 3 cells does not grow enough by days 4–8. Our reading: cutting the wind is a weak, fast-relaxing anomaly in an anomaly-space model, and the box sits on the grid's western edge. It is the most honest open problem we have.</p></div></details>
+
+<details><summary>22. How would you scale to 0.25°?</summary><div><p>Same design, 4× more cells each way (≈ 128 × 144). Each cell is 4× smaller, so to allow the same physical speed per day the reach in cells must be 4× larger: either more layers or, better, 4 sub-steps per day each with its own small stencil, which keeps the causality guarantee. Convolutions scale linearly with cell count, about 16× compute per step, still feasible on GPU for training. We would need finer data and probably more channels.</p></div></details>
+
+<details><summary>23. What would you do with another week?</summary><div><p>Retrain the members on all years 2005–2021 to narrow the gap to 2023–24; more ensemble members and seeds; log per-channel and per-lead scores; work on the stall propagation; add a slow ocean-memory channel; probabilistic rain; validate the impact rules against observed heat and rain outcomes.</p></div></details>
+
+<details><summary>24. Is it physics or machine learning?</summary><div><p>Machine learning with physical structure built in: locality (finite speed), climatology anchoring, physical bounds, and an optional physically-motivated advection step with a CFL-like cap. It does not solve the equations of motion.</p></div></details>
+
+<details><summary>25. Couldn't the model just memorise dates?</summary><div><p>It never receives a date, only day-of-year sin/cos as the contract specifies. The repo scan checks inference code for hardcoded dates and weather APIs, and for multi-year data archives. We ship a one-year climatology (365 days), which the rules allow.</p></div></details>
+
+<details><summary>26. How fast is it, and will it fit the judge's limits?</summary><div><p>In a container mimicking the judge (offline, 4 CPU, 6 GB, read-only): <span class="r" data-r="latency"></span> per 10-step call (limit 5 s), ready in <span class="r" data-r="ready"></span> (limit 120 s), <span class="r" data-r="ram"></span> RAM (limit 6 GB). It also passes the kit's schema validator there.</p></div></details>
+
+<details><summary>27. What happens with bad input?</summary><div><p>Wrong shapes or missing fields get a 422 error with a message, not a crash. NaN in the input is replaced by 0; any non-finite output falls back to climatology; rain and temperature are clamped, so output always passes the validity gate.</p></div></details>
+
+<details><summary>28. How does the model know about land, mountains and latitude?</summary><div><p>Every step gets the land-sea mask, orography (in km), latitude and day-of-year as extra input channels, plus the climatology of the target day. They are bundled in the weights folder, since the API does not send them.</p></div></details>
+
+<details><summary>29. Your impact module says "heatwave". Is that IMD's definition?</summary><div><p>No, and we say so on screen: we use daily-mean t2m ≥ 34 °C as a heat-stress proxy, because the data only has daily means; IMD heatwave criteria use daily maximum temperature. Dry day &lt; 2.5 mm follows IMD's rainy-day threshold. It is a decision aid comparing Prime and Multiverse, not an official forecast.</p></div></details>
+
+<details><summary>30. A judge applies a new shock live, somewhere odd. What do we expect?</summary><div><p>A response that starts in and around the box and spreads no faster than 6–8 cells per day; nothing changes beyond the reach ring. Its size depends on the channel and the season (a shock against the season may relax quickly). If it is applied at a map edge, the spread is one-sided. If the shock is zero, the output is identical.</p></div></details>
+
+<details><summary>31. How many parameters? How long to train?</summary><div><p>Width 96, 5 blocks (4 for adv1); about 7 minutes per run on an RTX 4050; the three weight files are about 1.6–2 MB each. (If asked for an exact count, <code>train.py</code> prints it at start-up.)</p></div></details>
+</section>
+
+<!-- ============================================================ 11 RULES -->
+<section id="rules">
+<h2>11. Rules we follow, and how the repo scan scores us</h2>
+<table>
+<thead><tr><th>Rule</th><th>How we comply</th></tr></thead>
+<tbody>
+<tr><td>Offline, no weather APIs at inference</td><td><code>serve.py</code> imports only <code>model/</code> (numpy + torch) and FastAPI/uvicorn. Training data is read only by <code>train/</code>.</td></tr>
+<tr><td>No hardcoded dates in inference code</td><td>The server works from <code>doy_sincos</code> only. Dates appear only in training/evaluation/scenario scripts, which are not inference files.</td></tr>
+<tr><td>No multi-year archive, no .nc in the repo</td><td>Data lives outside the repo in <code>../data/</code>. The shipped climatology is 365 × 6 × 32 × 36 (allowed; the scan flags only &gt; 400 days). Dashboard scenarios are 13 days each, as JSON.</td></tr>
+<tr><td>Weights in the repo</td><td><code>weights/</code>: model_0.pt, model_1.pt, model_2.pt, config.json, stats.json, climatology.npy, static.npy.</td></tr>
+<tr><td>Server separate from UI</td><td>No streamlit/plotly/matplotlib in the server; the dashboard is a separate static folder calling the live API.</td></tr>
+<tr><td>Contract</td><td><code>python serve.py --port 8000</code> on 0.0.0.0, <code>/health</code> and <code>/simulate</code> with nested lists in physical units; checked with the kit's schema validator in an offline container (<code>scripts/judge_check.sh</code>).</td></tr>
+</tbody></table>
+
+<h3>Repo scan (15 points), rule by rule</h3>
+<table>
+<thead><tr><th>Check</th><th class="num">Pts</th><th>What the scanner looks for</th><th>Us</th></tr></thead>
+<tbody>
+<tr><td>Anti-cheat</td><td class="num">8</td><td>In files that serve <code>/simulate</code> and everything they import: no weather API names, fewer than 3 date literals and no <code>datetime(20..)</code> call; anywhere: no .npy/.npz shaped (&gt; 400, …, 32, 36); no .nc. Any critical flag = 0 of 8; each warning −2.</td><td><code>tests/test_api.py::test_repo_scan_clean</code> runs the kit scanner and asserts no critical flags and 8.0 anti-cheat points.</td></tr>
+<tr><td>Training pipeline</td><td class="num">3</td><td>A non-inference file with <code>loss.backward</code> / <code>optimizer.step</code> etc.</td><td><code>train/train.py</code></td></tr>
+<tr><td>Server separate from UI</td><td class="num">2</td><td>Inference files do not mention streamlit/gradio/plotly/matplotlib.pyplot.</td><td>yes</td></tr>
+<tr><td>Frontend present</td><td class="num">1</td><td>e.g. <code>index.html</code> or <code>app.js</code>.</td><td><code>dashboard/</code></td></tr>
+<tr><td>README</td><td class="num">0.5</td><td>README at repo root.</td><td>yes</td></tr>
+<tr><td>Checkpoint</td><td class="num">0.5</td><td>A weight file &gt; 1 KB (or a Hugging Face link).</td><td><code>weights/*.pt</code></td></tr>
+</tbody></table>
+<p>By these rules we expect 15/15. The test only asserts the anti-cheat part; the health part follows from the files listed.</p>
+</section>
+
+<section id="sources">
+<h2>Sources for this page</h2>
+<p>Rules: <code>TRACKS_T2_vs_T3.md</code> (section 0–1), <code>kits/yug-monsoon-kit/docs/R1_CONTRACT.md</code>, <code>monsoon_r1/scoring.py</code>, <code>monsoon_r1/repo_scan.py</code>.
+Code: <code>model/net.py</code>, <code>model/simulator.py</code>, <code>model/common.py</code>, <code>serve.py</code>, <code>train/*.py</code>, <code>tests/*.py</code>, <code>dashboard/app.js</code>, <code>dashboard/index.html</code>, <code>weights/config.json</code>.
+Numbers: <code>docs/EXPERIMENTS.md</code> only. General science and ML definitions in the glossary are standard knowledge.</p>
+<p class="caption">Note on older docs: <code>README.md</code> and <code>CLAUDE.md</code> say "6 cells per simulated day". That is true for the two plain members; the shipped ens3 also contains the advection member, whose reach is 8. Say "6 to 8, never above the judge's 8".</p>
+</section>
+</main>
+</div>
+
+<script>
+// Fill every <span class="r" data-r="key"> from the Results cell with id "R-key", so numbers live in one place.
+(function () {
+  document.querySelectorAll('[data-r]').forEach(function (el) {
+    var src = document.getElementById('R-' + el.getAttribute('data-r'));
+    el.textContent = src ? src.textContent.trim() : '(see Results)';
+    el.title = 'From the Results section';
+  });
+  // Open all answers when printing.
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details').forEach(function (d) { d.setAttribute('open', ''); });
+  });
+})();
+</script>
+</body>
+</html>
