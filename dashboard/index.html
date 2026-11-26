@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Climate Digital Twin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1 id="appTitle">Climate Digital Twin</h1>
+      <span class="sub" id="scenSub">Loading scenarios…</span>
+    </div>
+    <div class="status" id="statusBar">
+      <span class="dot" id="apiDot" title="API status"></span>
+      <span id="apiText">checking…</span>
+      <span class="sep">|</span>
+      <span>model <b id="modelName">—</b></span>
+      <span class="sep">|</span>
+      <span>inference <b id="infMs">—</b></span>
+      <span class="sep">|</span>
+      <span>steps <b id="stepsTxt">—</b></span>
+      <label class="baseurl">API <input id="baseUrl" type="text" spellcheck="false"></label>
+    </div>
+  </header>
+
+  <div class="offline-banner" id="offlineBanner" hidden>
+    SERVER OFFLINE — cannot reach <span id="offlineUrl"></span>/health. No model output is shown until the live
+    <code>/simulate</code> endpoint is reachable. Start it with <code>python serve.py --port 8000</code>.
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="card">
+        <h2>Scenario</h2>
+        <label>Start state<select id="scenSel"></select></label>
+        <div class="row2">
+          <label>Channel<select id="chSel"></select></label>
+          <label>Days (N)<input id="stepsIn" type="number" min="1" max="30" value="10"></label>
+        </div>
+        <div class="toggles">
+          <label><input type="checkbox" id="obsTog"> Observed</label>
+          <label><input type="checkbox" id="arrowTog"> Wind arrows</label>
+          <label><input type="checkbox" id="smoothTog"> Smooth</label>
+          <label><input type="checkbox" id="regionTog"> Regions</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Shock painter</h2>
+        <div class="presets">
+          <button data-preset="bob" class="chip">Warm Bay of Bengal</button>
+          <button data-preset="stall" class="chip">Monsoon stall</button>
+          <button data-preset="zero" class="chip">Zero shock</button>
+        </div>
+        <p class="hint">Or drag a rectangle on any map to set the shock box.</p>
+        <div class="boxline">Box: <b id="boxTxt">none</b></div>
+        <div class="row3">
+          <label>Channel<select id="pChSel"></select></label>
+          <label>Mode<select id="pModeSel">
+            <option value="add">+ physical</option>
+            <option value="pct">% of last day</option>
+          </select></label>
+          <label>Value <span id="pUnit" class="unit"></span><input id="pVal" type="number" step="any" value="3"></label>
+        </div>
+        <button id="addComp" class="secondary">Add to shock</button>
+        <ul id="compList" class="complist"></ul>
+        <div class="pertstats" id="pertStats"></div>
+        <button id="runBtn" class="primary">Run multiverse ▶</button>
+        <div class="runmsg" id="runMsg"></div>
+      </section>
+
+      <section class="card">
+        <h2>Day</h2>
+        <div class="dayrow">
+          <button id="playBtn" class="secondary icon" title="Play / pause (space)">▶</button>
+          <input id="daySl" type="range" min="1" max="10" value="1">
+          <span class="dayval" id="dayTxt">1</span>
+        </div>
+        <div class="datetxt" id="dateTxt"></div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <div class="panels" id="panels">
+        <figure class="panel" data-kind="obs" id="panelObs" hidden>
+          <figcaption><span class="ptitle">Observed</span><span class="psub" id="subObs"></span></figcaption>
+          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
+          <canvas class="legend"></canvas>
+        </figure>
+        <figure class="panel" data-kind="prime">
+          <figcaption><span class="ptitle">Timeline Prime</span><span class="psub" id="subPrime">unshocked rollout</span></figcaption>
+          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
+          <canvas class="legend"></canvas>
+        </figure>
+        <figure class="panel" data-kind="multi">
+          <figcaption><span class="ptitle">Multiverse</span><span class="psub" id="subMulti">shocked rollout</span></figcaption>
+          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
+          <canvas class="legend"></canvas>
+        </figure>
+        <figure class="panel" data-kind="delta">
+          <figcaption><span class="ptitle">Δ Multiverse − Prime</span><span class="psub" id="subDelta"></span></figcaption>
+          <div class="cwrap"><canvas class="map"></canvas><div class="overlay"></div></div>
+          <canvas class="legend"></canvas>
+        </figure>
+      </div>
+      <div class="readout" id="readout">Hover a map to read values. Drag on a map to paint a shock box.</div>
+
+      <div class="lower">
+        <section class="card spread">
+          <h2>Spread of the shock <span class="h2sub">— response energy near vs far from the box</span></h2>
+          <canvas id="spreadCv"></canvas>
+          <div class="reachrow" id="reachRow"></div>
+          <p class="foot">Energy per cell = Σ<sub>channels</sub> (Δ / σ<sub>ch</sub>)², σ = [13.46 K, 7.55 mm/d, 2.90, 2.43 m/s,
+            619 Pa, 20.49 kg/m²]. “Near” = within 2 cells of the box; “far” = everything else (mean per cell, log scale).
+            Reach = furthest cell (Chebyshev distance in 1° grid cells from the box) with energy &gt; 10⁻³; it is also drawn as a dotted ring on the Δ map.</p>
+        </section>
+        <section class="card impact">
+          <h2>Heat &amp; Kharif water-stress co-pilot <span class="h2sub">— Prime vs Multiverse, land cells only</span></h2>
+          <div id="impactBody"></div>
+          <p class="foot" id="impactFoot"></p>
+        </section>
+      </div>
+    </main>
+  </div>
+  <noscript>This dashboard needs JavaScript.</noscript>
+  <script src="colormaps.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
