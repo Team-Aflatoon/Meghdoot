@@ -1242,6 +1242,7 @@ async function init() {
   $('cityTog').onchange = () => { S.showCities = $('cityTog').checked; renderAll(); };
   $('daySl').oninput = () => setDay(+$('daySl').value);
   loadTheme(); $('playBtn').innerHTML = ICON_PLAY;
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { loadTheme(); renderAll(); });
   $('playBtn').onclick = togglePlay;
   $('runBtn').onclick = runMultiverse;
   $('addComp').onclick = () => {

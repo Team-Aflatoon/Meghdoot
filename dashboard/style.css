@@ -2,6 +2,7 @@
  * nav: top bar with live status readings, controls in a left rail · signature: the Δ map, Multiverse minus Prime, set as the lead panel of one hairline surface · states: loading, offline, busy, full · console: graphite
  * axes: dark/grotesk-sans/chromatic-amber · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P4 H4 E4 S4 R3 V4 · weakest: R, the lower cards stay text-dense because every number on them is the model's own; kept, set in the measured face */
+@import url("./fonts/fonts.css");
 @import url("./tokens.css");
 @import url("./base.css");
 
