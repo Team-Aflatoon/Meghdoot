@@ -1,40 +1,45 @@
 {
- "name": "meghdoot-ens5",
+ "name": "meghdoot-ens5sk",
  "members": [
   {
    "file": "model_0.pt",
    "width": 96,
    "blocks": 5,
    "advect": false,
-   "from": "v1"
+   "flux": false,
+   "from": "sk_p0"
   },
   {
    "file": "model_1.pt",
    "width": 96,
    "blocks": 5,
    "advect": false,
-   "from": "v1s1"
+   "flux": false,
+   "from": "sk_p1"
   },
   {
    "file": "model_2.pt",
    "width": 96,
    "blocks": 5,
    "advect": false,
-   "from": "v1s2"
+   "flux": false,
+   "from": "sk_p2"
   },
   {
    "file": "model_3.pt",
    "width": 96,
    "blocks": 4,
    "advect": true,
-   "from": "adv1"
+   "flux": false,
+   "from": "sk_a0"
   },
   {
    "file": "model_4.pt",
    "width": 96,
    "blocks": 4,
    "advect": true,
-   "from": "adv1s1"
+   "flux": false,
+   "from": "sk_a1"
   }
  ]
 }

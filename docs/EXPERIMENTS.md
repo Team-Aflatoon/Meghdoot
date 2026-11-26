@@ -166,3 +166,35 @@ Verdict: the hypothesis is rejected (stall propagation did not improve). ens7f i
 causality. That is within the noise of a 5-window judge, so it is **not shipped**. The `--flux` option stays in the code as a
 documented experiment. Conclusion of all probes tonight (capacity, epochs, damping, all-years, quantile mapping, bias,
 flux): this model family is near its ceiling on this data; the remaining automated-score variance is window luck.
+
+## The metric-aligned loss (shipped: `meghdoot-ens5sk`)
+
+Idea from an independent research agent that was given the problem, the scoring code and our code, but none of our
+experiment history. Every earlier experiment varied the model around a plain MSE loss; this one changes the loss itself.
+
+**Loss** (`train/train.py --skill-loss 1`): for each sample, lead and channel, the model's latitude-weighted MSE is
+divided by the MSE of the better baseline (persistence or climatology) for that same sample, lead and channel. The
+square root is taken, which is the RMSE ratio inside the judge's skill score. The per-lead and pooled forms are mixed
+50/50. Schedule 1:10, 2:4, 4:6, 8:6 (unroll to 8 days, a scored lead).
+
+**Why it helps:** plain MSE is dominated by late leads and stormy windows, where raw errors are largest, so day 1 was
+under-trained. The judge rewards beating the better baseline equally in every window, lead and channel. Day-1 skill rose
+from about 0.17 to 0.28.
+
+Held-out 2020–21, dense 144 windows (members trained on 2005–2019 with the repo's own `train.py`):
+
+| run | pooled SS | per-lead SS | CSI skill |
+|---|---:|---:|---:|
+| old single member (v1) | +0.076 | +0.014 | +0.085 |
+| sk_p0 / sk_p1 / sk_p2 (plain, seeds 0–2) | +0.139 / +0.139 / +0.140 | +0.091 / +0.092 / +0.093 | +0.098 / +0.097 / +0.099 |
+| sk_a0 / sk_a1 (advection, seeds 0–1) | +0.133 / +0.136 | +0.086 / +0.089 | +0.092 / +0.097 |
+| old ensemble ens5 | +0.113 | +0.058 | +0.095 |
+| **ens5sk (shipped)** | **+0.154** | **+0.112** | **+0.105** |
+
+ens5sk also: anti-blur 10/10, gate +0.267 vs persistence at day 4, causality sweep 13.39/15 over 72 windows (warm_ocean
+propagates 88% / stable 99%, monsoon_stall propagates 28% / stable 100%, null identical 72/72). Estimated automated
+total: about 68.4/70 (pooled) and 66.4/70 (per-lead), up from 65.5 and 53.5. Risk calibration refit on 2020–21 for the new
+members: Brier skill on 2021 (fit 2020) is heavy rain +0.343 / +0.032 / +0.006 and heat +0.624 / +0.197 / +0.055 at
+days 1 / 4 / 8. Container: 0.25 s per call, 199 MB. Tests 15/15.
+
+Lesson for the log: train on what you are scored on. The independent agent found it because it was not anchored on our history.

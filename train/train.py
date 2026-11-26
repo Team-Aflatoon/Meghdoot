@@ -37,6 +37,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--advect", action="store_true", help="semi-Lagrangian wind step before the CNN")
     ap.add_argument("--flux", action="store_true", help="moisture-flux input features (u10*tcwv, v10*tcwv)")
+    ap.add_argument("--skill-loss", type=float, default=0.0,
+                    help="weight of the metric-aligned loss: error / error of the better baseline (persistence or climatology)")
     ap.add_argument("--prepared", default=str(ROOT.parent / "data" / "prepared.npz"))
     ap.add_argument("--stats", default=str(ROOT.parent / "data" / "stats.json"))
     a = ap.parse_args()
@@ -54,7 +56,7 @@ def main() -> None:
     np.save(out / "climatology.npy", clim); np.save(out / "static.npy", static)
     shutil.copy(a.stats, out / "stats.json")
     cfg = {"name": f"stencil-{a.name}", "width": a.width, "blocks": a.blocks, "val_start": a.val_start,
-           "schedule": a.schedule, "rain_weight": a.rain_weight, "seed": a.seed, "advect": a.advect, "flux": a.flux, "lr": a.lr, "batch": a.batch}
+           "schedule": a.schedule, "rain_weight": a.rain_weight, "seed": a.seed, "advect": a.advect, "flux": a.flux, "skill_loss": a.skill_loss, "lr": a.lr, "batch": a.batch}
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
 
     T = lambda x: torch.as_tensor(x, device=dev)
@@ -86,7 +88,21 @@ def main() -> None:
                 err = ((pred - true) / S_[None, None, :, None, None]) ** 2
                 w = torch.ones_like(err)
                 w[:, :, 1] = 1 + a.rain_weight * (true[:, :, 1] > 10.0).float()
-                loss = (err * w * latw).mean()
+                if a.skill_loss > 0:
+                    # Metric-aligned loss: the judge scores 1 - RMSE / min(RMSE_persistence, RMSE_climatology) per channel,
+                    # pooled over leads (and possibly per lead). Train on that ratio directly so every lead and every window
+                    # counts relative to how hard it is, instead of plain MSE, which is dominated by the late leads.
+                    sn = S_[None, None, :, None, None]
+                    num = (err * w * latw).mean((-2, -1))                                        # [B, K, 6]
+                    pers = win[:, 2:3].expand(-1, unroll, -1, -1, -1)                           # repeat the last input day
+                    cl = torch.stack([C[(SL[ii] + 1 + k) % C.shape[0]] for k in range(unroll)], 1)
+                    e_p = ((((pers - true) / sn) ** 2) * latw).mean((-2, -1))
+                    e_c = ((((cl - true) / sn) ** 2) * latw).mean((-2, -1))
+                    per_lead = torch.sqrt(num / torch.minimum(e_p, e_c).clamp_min(1e-3) + 1e-8).mean()
+                    pooled = torch.sqrt(num.mean(1) / torch.minimum(e_p.mean(1), e_c.mean(1)).clamp_min(1e-3) + 1e-8).mean()
+                    loss = a.skill_loss * 0.5 * (per_lead + pooled) + (1 - a.skill_loss) * (err * w * latw).mean()
+                else:
+                    loss = (err * w * latw).mean()
                 opt.zero_grad(set_to_none=True); loss.backward()
                 torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
                 opt.step()
