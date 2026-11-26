@@ -48,6 +48,19 @@ const REGIONS = [
   { name: 'East & NE India', s: 20, n: 28, w: 84, e: 96 },
 ];
 
+// Cities: each maps to the 1° grid cell that contains it (nearest cell centre). dx = label side (+1 right, −1 left).
+const CITIES = [
+  ['Mumbai', 19.08, 72.88, 'Mum', -1], ['Delhi', 28.61, 77.21, 'Del', 1], ['Kolkata', 22.57, 88.36, 'Kol', 1],
+  ['Chennai', 13.08, 80.27, 'Che', 1], ['Bengaluru', 12.97, 77.59, 'Blr', -1], ['Hyderabad', 17.39, 78.49, 'Hyd', 1],
+  ['Ahmedabad', 23.02, 72.57, 'Ahd', -1], ['Pune', 18.52, 73.86, 'Pune', 1], ['Jaipur', 26.91, 75.79, 'Jai', -1],
+  ['Lucknow', 26.85, 80.95, 'Lko', 1], ['Bhubaneswar', 20.30, 85.82, 'Bbsr', 1], ['Guwahati', 26.14, 91.74, 'Guw', 1],
+  ['Kochi', 9.93, 76.27, 'Koc', -1], ['Nagpur', 21.15, 79.09, 'Ngp', 1],
+].map(([name, lat, lon, short, dx]) => {
+  const r = Math.round(lat - LAT0), col = Math.round(lon - LON0);
+  return { name, lat, lon, short, dx, r, col, cell: r * NC + col };
+});
+const CITY_ALL = -1;            // "All India (land average)"
+
 const PRESETS = {
   bob: { label: 'Warm Bay of Bengal', box: { s: 8, n: 20, w: 82, e: 94 },
     comps: [{ ch: 0, mode: 'add', val: 3 }, { ch: 5, mode: 'pct', val: 15 }] },
@@ -67,6 +80,7 @@ const S = {
   multi: null, multiSteps: 0, multiDesc: '', multiBox: null,
   shock: { box: null, comps: [], preset: null },
   showObs: false, arrows: false, smooth: false, regions: false,
+  city: CITY_ALL, showCities: true,
   busy: false, busyMsg: '', timer: null, drag: null, hover: null,
   rangeCache: new Map(), version: 0,
   // /risk: request captured per run, result cached per run (keyed by the run's rollout array identity)
@@ -520,7 +534,31 @@ function drawPanel(p) {
     const x = g.left + S.hover.col * cs, y = g.top + (NR - 1 - S.hover.r) * cs;
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.2; ctx.strokeRect(x, y, cs, cs);
   }
+  if (S.showCities || S.city !== CITY_ALL) drawCities(ctx, g);
   drawLegend(p);
+}
+
+// city dots + short labels; the selected city is drawn larger, with its full name and its grid cell outlined
+const cityXY = (g, ct) => [g.left + (ct.lon - LON_W_EDGE) * g.cs, g.top + (LAT_N_EDGE - ct.lat) * g.cs];
+function drawCities(ctx, g) {
+  ctx.font = '9.5px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  CITIES.forEach((ct, k) => {
+    const sel = k === S.city;
+    if (!sel && !S.showCities) return;
+    const [x, y] = cityXY(g, ct);
+    if (sel) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
+      ctx.strokeStyle = '#4fb3ff'; ctx.lineWidth = 1.5; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
+    }
+    ctx.beginPath(); ctx.arc(x, y, sel ? 3.6 : 2.3, 0, 7);
+    ctx.fillStyle = sel ? '#4fb3ff' : '#ffffff'; ctx.fill();
+    ctx.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.85)'; ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
+    const t = sel ? ct.name : ct.short, tx = x + ct.dx * (sel ? 6 : 4.5);
+    ctx.textAlign = ct.dx > 0 ? 'left' : 'right';
+    ctx.font = (sel ? '600 11px' : '9.5px') + ' "Segoe UI", sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 2.6; ctx.strokeText(t, tx, y);
+    ctx.fillStyle = sel ? '#bfe4ff' : 'rgba(255,255,255,0.92)'; ctx.fillText(t, tx, y);
+  });
 }
 
 function drawArrows(ctx, p, g, day0) {
@@ -773,6 +811,158 @@ function renderImpact() {
   body.innerHTML = html;
 }
 
+// ---------------------------------------------------------------- city forecast
+const cityName = () => (S.city === CITY_ALL ? 'All India' : CITIES[S.city].name);
+// value at the city's grid cell, or the mean over land cells for "All India"
+function cityVal(arr) {             // arr: NCELL per-cell values
+  if (S.city !== CITY_ALL) return arr[CITIES[S.city].cell];
+  let s = 0, n = 0;
+  for (let i = 0; i < NCELL; i++) if (S.land[i]) { s += arr[i]; n++; }
+  return n ? s / n : NaN;
+}
+// daily series of t2m (°C) and rain (mm/day, negative model rain treated as 0) for the selected city
+function citySeries(roll, days) {
+  if (!roll) return null;
+  const t = new Float64Array(days), rn = new Float64Array(days);
+  for (let d = 0; d < days; d++) {
+    const ot = (d * NCH) * NCELL, orr = (d * NCH + 1) * NCELL;
+    if (S.city !== CITY_ALL) {
+      const i = CITIES[S.city].cell;
+      t[d] = roll[ot + i] - 273.15; rn[d] = Math.max(0, roll[orr + i]);
+    } else {
+      let st = 0, sr = 0, n = 0;
+      for (let i = 0; i < NCELL; i++) if (S.land[i]) { st += roll[ot + i]; sr += Math.max(0, roll[orr + i]); n++; }
+      t[d] = st / n - 273.15; rn[d] = sr / n;
+    }
+  }
+  return { t, rain: rn };
+}
+// chance of a heavy-rain day: highest daily calibrated P(rain > 10 mm) over the N days at the city cell
+// (All India: land mean of each cell's peak) in %, or null when /risk has no result for this run
+function cityRisk(kind, N) {
+  if (S.riskOff) return null;
+  const e = ensureRisk(kind);
+  if (!e || e.status !== 'ok') return null;
+  const D = Math.min(N, e.steps), peak = new Float32Array(NCELL);
+  for (let d = 0; d < D; d++) for (let i = 0; i < NCELL; i++) { const v = e.rain[d * NCELL + i]; if (v > peak[i]) peak[i] = v; }
+  return cityVal(peak) * 100;
+}
+function cityData() {
+  const N = S.primeSteps;
+  if (!S.prime || !N) return null;
+  const nObs = Math.min(NOBS, N);
+  return { N, nObs, P: citySeries(S.prime, N), M: S.multi && S.multiSteps === N ? citySeries(S.multi, N) : null,
+    O: S.scen ? citySeries(S.scen.obs, nObs) : null };
+}
+function renderCity() {
+  const sum = $('citySum'), cv = $('cityCv');
+  $('cityFoot').innerHTML = (S.city === CITY_ALL
+    ? 'All India = mean over all land cells (land-sea mask ≥ 0.5) of the 32 × 36 grid (6–38°N, 65–101°E), daily mean — this includes the Himalaya / Tibet and neighbouring countries, which pulls the mean temperature down. '
+    : `Value of the 1° grid cell containing ${cityName()} (≈110 km box, centre ${(LAT0 + CITIES[S.city].r).toFixed(1)}°N ${(LON0 + CITIES[S.city].col).toFixed(1)}°E), daily mean — not a station reading. `) +
+    'Temperature = daily-mean 2 m temperature; “peak” = warmest daily mean, not the daily maximum. Negative model rain is treated as 0. ' +
+    `Observed = what really happened (days 1–${NOBS}). ` +
+    (S.riskOff ? `Heavy-rain chance hidden: this server’s /risk returned ${S.riskOff}.`
+      : `Chance of a heavy-rain day = highest daily calibrated P(rain &gt; ${RISK_MM} mm/day) over the N days (POST /risk)${S.city === CITY_ALL ? ', averaged over land cells' : ''}.`);
+  const D = cityData();
+  drawCityChart(cv, D);
+  if (!D) { sum.innerHTML = `<span class="muted">${S.online === false ? 'Server offline — no live rollout.' : S.busy ? S.busyMsg : 'Waiting for the live Prime run…'}</span>`; return; }
+  const total = (a) => a.reduce((x, y) => x + y, 0), peak = (a) => Math.max(...a);
+  const pr = total(D.P.rain), pt = peak(D.P.t);
+  const parts = [`<b>${cityName()}</b>`];
+  if (D.M) {
+    const mr = total(D.M.rain), mt = peak(D.M.t);
+    const pct = pr >= 0.5 ? ` (${sgn((mr - pr) / pr * 100, 0)}%)` : '';
+    parts.push(`${D.N}-day rain <b>${fmt(pr, 0)} mm</b> → <b class="${mr > pr + 0.5 ? 'up' : mr < pr - 0.5 ? 'down' : ''}">${fmt(mr, 0)} mm</b>${pct}`);
+    parts.push(`peak daily-mean temp <b>${fmt(pt, 1)}</b> → <b>${fmt(mt, 1)} °C</b>`);
+    const rp = cityRisk('prime', D.N), rm = cityRisk('multi', D.N);
+    if (rp != null && rm != null) parts.push(`chance of a heavy-rain day <b>${fmt(rp, 0)}%</b> → <b>${fmt(rm, 0)}%</b>`);
+  } else {
+    parts.push(`${D.N}-day rain <b>${fmt(pr, 0)} mm</b>`, `peak daily-mean temp <b>${fmt(pt, 1)} °C</b>`);
+    const rp = cityRisk('prime', D.N);
+    if (rp != null) parts.push(`chance of a heavy-rain day <b>${fmt(rp, 0)}%</b>`);
+  }
+  if (D.O) parts.push(`<span class="muted">observed ${D.nObs}-day rain ${fmt(total(D.O.rain), 0)} mm</span>`);
+  sum.innerHTML = parts.join(' · ');
+}
+function drawCityChart(cv, D) {
+  const cssW = cv.clientWidth, cssH = 176;
+  const ctx = sizeCanvas(cv, cssW, cssH);
+  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.font = '11px "Segoe UI", sans-serif';
+  if (!D) {
+    ctx.fillStyle = '#8d99aa'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(S.online === false ? 'Server offline' : 'Waiting for the live Prime run…', cssW / 2, cssH / 2);
+    return;
+  }
+  const L = 50, R = 10, T = 18, GAP = 12, B = 16, N = D.N;
+  const w = cssW - L - R, hh = (cssH - T - B - GAP) / 2;
+  const yT0 = T, yR0 = T + hh + GAP;
+  const bw = w / N, X = (d) => L + (d + 0.5) * bw;
+  const PC = '#4fb3ff', MC = '#f5b83d', OC = '#9aa4b2';
+  const series = (k) => [D.P[k], D.M && D.M[k], D.O && D.O[k]].filter(Boolean).flatMap((a) => Array.from(a));
+  const ts = series('t');
+  let tlo = Math.min(...ts), thi = Math.max(...ts);
+  if (thi - tlo < 2) { const m = (thi + tlo) / 2; tlo = m - 1; thi = m + 1; }
+  const tpad = (thi - tlo) * 0.12; tlo -= tpad; thi += tpad;
+  const rhi = Math.max(1, ...series('rain')) * 1.1;
+  const YT = (v) => yT0 + hh - (v - tlo) / (thi - tlo) * hh;
+  const YR = (v) => yR0 + hh - v / rhi * hh;
+  // gridlines + axis labels
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.fillStyle = '#8d99aa';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const ticks = (lo, hi) => {
+    const sp = hi - lo, st = sp > 120 ? 50 : sp > 60 ? 20 : sp > 25 ? 10 : sp > 12 ? 5 : sp > 5 ? 2 : sp > 2.5 ? 1 : 0.5;
+    const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v); return out;
+  };
+  const grid = (vals, Y) => { for (const v of vals) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke(); ctx.fillText(v.toFixed(v % 1 ? 1 : 0), L - 4, y); } };
+  grid(ticks(tlo, thi), YT); grid(ticks(0, rhi), YR);
+  const vlabel = (t, yc) => { ctx.save(); ctx.translate(9, yc); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText(t, 0, 0); ctx.restore(); };
+  vlabel('°C', yT0 + hh / 2); vlabel('mm/day', yR0 + hh / 2);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const every = N <= 15 ? 1 : 2, cd = S.day - 1;
+  for (let d = 0; d < N; d++) if (d % every === 0 || d === cd) ctx.fillText('d' + (d + 1), X(d), yR0 + hh + 3);
+  // current day (from the day slider)
+  if (cd >= 0 && cd < N) {
+    ctx.fillStyle = 'rgba(245,184,61,0.13)'; ctx.fillRect(L + cd * bw, yT0, bw, yR0 + hh - yT0);
+    ctx.strokeStyle = 'rgba(245,184,61,0.55)'; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(X(cd), yT0); ctx.lineTo(X(cd), yR0 + hh); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // rain: Prime | Multiverse bars side by side; observed as a dashed line
+  const nb = D.M ? 2 : 1, barW = Math.max(2, Math.min(16, bw * (D.M ? 0.34 : 0.55)));
+  const bars = (a, col, k) => { ctx.fillStyle = col; a.forEach((v, d) => { const x = X(d) - nb * barW / 2 + k * barW; ctx.fillRect(x, YR(v), barW - 1, yR0 + hh - YR(v)); }); };
+  bars(D.P.rain, PC, 0); if (D.M) bars(D.M.rain, MC, 1);
+  const line = (a, col, Y, dash, wd = 2) => {
+    ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.setLineDash(dash); ctx.beginPath();
+    a.forEach((v, d) => (d ? ctx.lineTo(X(d), Y(v)) : ctx.moveTo(X(d), Y(v)))); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = col; a.forEach((v, d) => { ctx.beginPath(); ctx.arc(X(d), Y(v), 2.2, 0, 7); ctx.fill(); });
+  };
+  if (D.O) { line(D.O.t, OC, YT, [4, 3], 1.5); line(D.O.rain, OC, YR, [4, 3], 1.5); }
+  line(D.P.t, PC, YT, []);
+  if (D.M) line(D.M.t, MC, YT, []);
+  // legend + current-day values
+  ctx.font = '11px "Segoe UI", sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const lg = [[PC, 'Prime']]; if (D.M) lg.push([MC, 'Multiverse']); if (D.O) lg.push([OC, `Observed (d1–${D.nObs})`]);
+  let lx = L + 2;
+  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, 7, 12, 3); ctx.fillStyle = '#c3ccd8'; ctx.fillText(t, lx + 16, 8.5); lx += ctx.measureText(t).width + 32; }
+  if (cd >= 0 && cd < N) {
+    ctx.textAlign = 'right'; ctx.fillStyle = '#8d99aa';
+    ctx.fillText(`day ${S.day}: ${fmt(D.P.t[cd], 1)} °C, ${fmt(D.P.rain[cd], 1)} mm` +
+      (D.M ? ` → ${fmt(D.M.t[cd], 1)} °C, ${fmt(D.M.rain[cd], 1)} mm` : ''), L + w, 8.5);
+  }
+}
+function setCity(k) {
+  S.city = k; $('citySel').value = String(k);
+  localStorage.setItem('mom.city', String(k));
+  renderAll();
+}
+function cityNear(p, ev) {          // index of the city marker within 8 px of the pointer, else null
+  if (!p.geo || !S.showCities) return null;
+  const rect = p.cv.getBoundingClientRect(), x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+  let best = null, bd = 8;
+  CITIES.forEach((ct, k) => { const [cx, cy] = cityXY(p.geo, ct); const d = Math.hypot(cx - x, cy - y); if (d <= bd) { bd = d; best = k; } });
+  return best;
+}
+
 // ---------------------------------------------------------------- UI rendering
 function renderStatus() {
   const dot = $('apiDot');
@@ -828,6 +1018,7 @@ function renderAll() {
   for (const p of panels) if (!p.el.hidden) drawPanel(p);
   drawSpread();
   renderImpact();
+  renderCity();
   const N = S.primeSteps || S.steps;
   $('dayTxt').textContent = S.day;
   $('dateTxt').textContent = `Forecast day ${S.day} of ${N} → valid ${dateOf(S.scen.last_input_day, S.day)} (start state ends ${dateOf(S.scen.last_input_day, 0)})`;
@@ -895,7 +1086,7 @@ for (const p of panels) {
   p.cv.addEventListener('mousedown', (ev) => {
     const c = cellFromEvent(p, ev); if (!c || !c.inside) return;
     ev.preventDefault();
-    S.drag = { a: c, box: snapBox(c, c) };
+    S.drag = { a: c, box: snapBox(c, c), city: cityNear(p, ev), x0: ev.clientX, y0: ev.clientY };
     renderAll();
   });
   p.cv.addEventListener('mousemove', (ev) => {
@@ -903,13 +1094,17 @@ for (const p of panels) {
     const h = c && c.inside ? { r: c.r, col: c.col } : null;
     const changed = JSON.stringify(h) !== JSON.stringify(S.hover);
     S.hover = h;
+    if (!S.drag) p.cv.style.cursor = cityNear(p, ev) != null ? 'pointer' : 'crosshair';
     if (S.drag && c) { S.drag.box = snapBox(S.drag.a, c); renderAll(); }
     else if (changed) { for (const q of panels) if (!q.el.hidden) drawPanel(q); renderReadout(); }
   });
   p.cv.addEventListener('mouseleave', () => { if (!S.drag) { S.hover = null; for (const q of panels) if (!q.el.hidden) drawPanel(q); renderReadout(); } });
 }
-window.addEventListener('mouseup', () => {
+window.addEventListener('mouseup', (ev) => {
   if (!S.drag) return;
+  if (S.drag.city != null && Math.hypot(ev.clientX - S.drag.x0, ev.clientY - S.drag.y0) < 4) {   // a click on a city dot selects it
+    const k = S.drag.city; S.drag = null; setCity(k); return;
+  }
   S.shock.box = S.drag.box; S.shock.preset = null; S.drag = null;
   setRunMsg('Custom box set. Add components (or keep a preset’s) and press “Run multiverse”.', '');
   renderSidebar(); renderAll();
@@ -983,6 +1178,14 @@ async function init() {
   $('arrowTog').onchange = () => { S.arrows = $('arrowTog').checked; renderAll(); };
   $('smoothTog').onchange = () => { S.smooth = $('smoothTog').checked; renderAll(); };
   $('regionTog').onchange = () => { S.regions = $('regionTog').checked; renderAll(); };
+  $('citySel').add(new Option('All India (land average)', CITY_ALL));
+  CITIES.forEach((ct, k) => $('citySel').add(new Option(ct.name, k)));
+  const savedCity = localStorage.getItem('mom.city');
+  if (savedCity != null && (+savedCity === CITY_ALL || CITIES[+savedCity])) S.city = +savedCity;
+  $('citySel').value = String(S.city);
+  $('citySel').onchange = () => setCity(+$('citySel').value);
+  $('cityTog').checked = S.showCities;
+  $('cityTog').onchange = () => { S.showCities = $('cityTog').checked; renderAll(); };
   $('daySl').oninput = () => setDay(+$('daySl').value);
   $('playBtn').onclick = togglePlay;
   $('runBtn').onclick = runMultiverse;

@@ -45,6 +45,7 @@
           <label><input type="checkbox" id="arrowTog"> Wind arrows</label>
           <label><input type="checkbox" id="smoothTog"> Smooth</label>
           <label><input type="checkbox" id="regionTog"> Regions</label>
+          <label><input type="checkbox" id="cityTog" checked> Cities</label>
         </div>
       </section>
 
@@ -108,6 +109,16 @@
       </div>
       <div class="readout" id="readout">Hover a map to read values. Drag on a map to paint a shock box.</div>
       <div class="risknote" id="riskNote" hidden></div>
+
+      <section class="card city">
+        <div class="cityhead">
+          <h2>City forecast</h2>
+          <select id="citySel" title="Pick a city (or click a city dot on any map)"></select>
+          <div class="citysum" id="citySum"></div>
+        </div>
+        <canvas id="cityCv"></canvas>
+        <p class="foot" id="cityFoot"></p>
+      </section>
 
       <div class="lower">
         <section class="card spread">
