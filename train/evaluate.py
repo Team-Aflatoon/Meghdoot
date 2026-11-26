@@ -90,7 +90,8 @@ def main() -> None:
         sk = S.skill_vs_best_ref(pred[L], truth[L], pers[L], clim[L])
         c_m, c_p, c_c = S.csi(pred[L, 1], truth[L, 1]), S.csi(pers[L, 1], truth[L, 1]), S.csi(clim[L, 1], truth[L, 1])
         sk4 = S.skill_vs_best_ref(pred[[3]], truth[[3]], pers[[3]], clim[[3]])
-        return {"ss": float(np.nanmean(sk["ss"])), "ss_ch": sk["ss"].tolist(),
+        perlead = float(np.mean([np.nanmean(S.skill_vs_best_ref(pred[[l]], truth[[l]], pers[[l]], clim[[l]])["ss"]) for l in L]))
+        return {"ss": float(np.nanmean(sk["ss"])), "ss_ch": sk["ss"].tolist(), "ss_perlead": perlead,
                 "ss_persist_d4": float(np.nanmean(sk4["ss_persist"])),
                 "csi_skill": S.csi_skill(c_m, c_p, c_c), "csi": c_m,
                 "var_ratio": S.variance_ratio(pred[7], truth[7]).tolist(),
@@ -105,6 +106,7 @@ def main() -> None:
         ab = S.anti_blur_points(np.array([r["var_ratio"] for r in rows]))
         res[label] = {"n": len(rows), "forecast": fp, "anti_blur_pts": ab,
                       "ss_persist_d4_mean": float(np.mean([r["ss_persist_d4"] for r in rows])),
+                      "ss_perlead_mean": float(np.mean([r["ss_perlead"] for r in rows])),
                       "ss_per_channel": np.nanmean(np.array([r["ss_ch"] for r in rows]), 0).round(3).tolist(),
                       "invalid": [r["tag"] for r in rows if r["valid"]],
                       "rows": [{k: r[k] for k in ("tag", "ss", "csi_skill", "ss_persist_d4")} for r in rows] if label == "named" else []}
@@ -143,6 +145,7 @@ def main() -> None:
         print(f"  {label:5s} n={r['n']:3d}  meanSS={r['forecast']['mean_ss']:+.3f} rmse_pts={r['forecast']['rmse_pts']:.1f}/30  "
               f"csi_skill={r['forecast']['mean_csi_skill']:+.3f} csi_pts={r['forecast']['csi_pts']:.1f}/15  "
               f"blur={r['anti_blur_pts']:.1f}/10  ss_vs_persist_d4={r['ss_persist_d4_mean']:+.3f}  invalid={r['invalid']}")
+        print(f"        alt aggregation (SS per lead, then mean) = {r['ss_perlead_mean']:+.3f} -> rmse_pts {30*min(1,max(0,r['ss_perlead_mean']/0.12)):.1f}/30")
         print(f"        ss per channel t2m,tp,u10,v10,msl,tcwv = {r['ss_per_channel']}")
     for c in caus:
         s = c["shocks"]

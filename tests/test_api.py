@@ -42,3 +42,13 @@ def test_repo_scan_clean():
     crit = [f for f in res["flags"] if f["level"] == "critical"]
     assert not crit, crit
     assert res["anti_cheat_points"] == 8.0, res["flags"]
+
+
+def test_overflow_steps_is_422(client):
+    import serve
+    clim = serve.SIM.clim.numpy()
+    init = np.stack([clim[1], clim[2], clim[3]]).tolist()
+    import json
+    body = json.dumps({"init_states": init, "doy_sincos": [0, 1], "steps": 1}).replace('"steps": 1', '"steps": Infinity')
+    r = client.post("/simulate", content=body, headers={"Content-Type": "application/json"})
+    assert r.status_code == 422

@@ -52,7 +52,7 @@ async def simulate(request: Request):
         if len(sc) != 2:
             raise ValueError("doy_sincos must be [sin, cos]")
         out = SIM.simulate(init, sc, steps, pert)
-    except (KeyError, ValueError, TypeError) as e:
+    except (KeyError, ValueError, TypeError, OverflowError) as e:
         return JSONResponse({"error": str(e)}, status_code=422)
     return {"rollout": out.tolist(), "inference_ms": (time.perf_counter() - t0) * 1000.0}
 

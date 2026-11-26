@@ -34,6 +34,11 @@ class Simulator:
         t = lambda a: torch.as_tensor(np.asarray(a, dtype="f4"), device=self.device)
         self.mean, self.std = t(st["mean"]), t(st["std"])
         self.clim = t(np.load(weights_dir / "climatology.npy"))
+        # Optional lead-dependent anomaly damping (statistical post-processing, fitted out-of-sample by
+        # train/fit_damping.py): out_k = clim_k + lam[k, c] * (out_k - clim_k), lam in [0, 1]. Leads beyond the
+        # fitted range reuse the last row.
+        dp = weights_dir / "damping.npy"
+        self.damping = np.clip(np.load(dp).astype("f4"), 0.0, 1.0) if dp.exists() else None
         self.static = t(np.load(weights_dir / "static.npy"))
         self.lat = t(LAT)
 
@@ -48,8 +53,13 @@ class Simulator:
             if p.shape != (NC, NLAT, NLON):
                 raise ValueError(f"perturbation shape {p.shape}")
             x[-1] = x[-1] + p
-        x = np.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
         doy = doy_index_from_sincos(float(doy_sincos[0]), float(doy_sincos[1]))
+        if not np.isfinite(x).all():               # contract forbids NaN/Inf; if one slips in, use that day's climatology
+            clim = self.clim.cpu().numpy()
+            for i in range(T_IN):
+                c = clim[(doy - (T_IN - 1 - i)) % clim.shape[0]]
+                bad = ~np.isfinite(x[i])
+                x[i][bad] = c[bad]
         xt = torch.as_tensor(x[None], device=self.device)
         d0 = torch.tensor([doy], device=self.device, dtype=torch.long)
         out = None
@@ -57,6 +67,12 @@ class Simulator:
             r = rollout(net, xt, d0, int(steps), self.clim, self.mean, self.std, self.static, self.lat)[0]
             out = r if out is None else out + r
         out = (out / len(self.nets)).cpu().numpy().astype("f4")
+        if self.damping is not None:
+            clim = self.clim.cpu().numpy()
+            for k in range(out.shape[0]):
+                c = clim[(doy + 1 + k) % clim.shape[0]]
+                lam = self.damping[min(k, self.damping.shape[0] - 1)][:, None, None]
+                out[k] = c + lam * (out[k] - c)
         # last-resort guard: never emit NaN/Inf or out-of-range values (the judge's validity gate). Non-finite
         # cells fall back to that day's climatology.
         if not np.isfinite(out).all():

@@ -103,3 +103,11 @@ def test_fast_enough(sim):
     t0 = time.perf_counter()
     sim.simulate(x, sincos(1), 10)
     assert time.perf_counter() - t0 < 1.5                 # judge limit is 5.0 s including JSON transport
+
+
+def test_nan_input_falls_back_to_climatology(sim):
+    x = realistic_init(sim)
+    x[-1, 0, 10, 10] = np.nan; x[0, 4, 3, 3] = np.inf
+    out = sim.simulate(x, sincos(200), 10)
+    assert np.isfinite(out).all() and out[:, 1].min() >= 0
+    assert 233.15 <= out[:, 0].min() and out[:, 0].max() <= 333.15
