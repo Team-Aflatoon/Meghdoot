@@ -1,0 +1,32 @@
+[
+ {
+  "key": "cyclone_tauktae",
+  "label": "Cyclone Tauktae (Arabian Sea), May 2021",
+  "last_input_day": "20210513"
+ },
+ {
+  "key": "cyclone_yaas",
+  "label": "Cyclone Yaas (Bay of Bengal), May 2021",
+  "last_input_day": "20210522"
+ },
+ {
+  "key": "monsoon_onset",
+  "label": "Monsoon onset over Kerala, June 2021",
+  "last_input_day": "20210601"
+ },
+ {
+  "key": "heavy_rain_konkan",
+  "label": "Extreme rain over Konkan / Maharashtra, July 2021",
+  "last_input_day": "20210719"
+ },
+ {
+  "key": "heatwave_north",
+  "label": "North India heatwave, June 2019",
+  "last_input_day": "20190601"
+ },
+ {
+  "key": "winter_disturbance",
+  "label": "Western disturbance, January 2021",
+  "last_input_day": "20210120"
+ }
+]
