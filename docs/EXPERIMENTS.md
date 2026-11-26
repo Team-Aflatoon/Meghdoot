@@ -215,3 +215,14 @@ response is never calibrated, and a zero shock takes the exact unshocked path. F
 Decision: not shipped. The best variant gains about +0.35 expected points, well inside the noise of a 5-window judge,
 and B loses under the pooled reading and puts a clamp at the judge's exact 10 mm threshold into reviewed code. With
 the metric-aligned loss the non-rain channels are already calibrated (C ≈ the shipped model).
+
+## Ideas from other teams' public repos: tested, not shipped
+
+
+| idea | test | result | verdict |
+|---|---|---|---|
+| Physics diagnostics as inputs (divergence, vorticity, moisture-flux convergence; 3×3 stencils, reach +1) | one member (dg_p0) vs sk_p0, same loss and seed | pooled +0.136 vs +0.139, per-lead +0.090 vs +0.091, CSI +0.092 vs +0.098, causality 13.44 vs 13.59, stall 31% vs 39% | rejected: slightly worse on every axis |
+| More ERA5 training years (1959–2004, 2022) via the kit's builder | rebuilt Dec 2021 matches the organisers' file exactly (rain diff 9e-5 mm); speed measured | WeatherBench 2 serves global chunks: about 190 MB per month at about 0.5 MB/s, so about 110 GB and 60 h for the full range | dropped: cannot finish before the freeze; expected gain at most about 1 point (per-lead reading only) |
+
+Note: a single member (sk_p0) has better causality than the 5-member mean (13.59 vs 13.39): averaging cancels part of the
+remote response. The ensemble is kept because it gains far more skill (+0.015 pooled, +0.020 per-lead) than it loses there.
