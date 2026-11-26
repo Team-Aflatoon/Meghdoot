@@ -97,3 +97,28 @@ Seasonal causality sweep (`python -m train.causality_sweep`, both official shock
   scenarios are genuinely unseen by it.
 - Shipped weights: `weights/` = ens5 members (v1, v1s1, v1s2, adv1, adv1s1) + `risk.npz` (calibration fitted on
   2020–21 with these members). 15 tests pass; offline container: validator all pass, 0.26 s/call, 199 MB.
+
+## Arabian Sea +2.5 °C heat shock (organisers' deck example)
+
+The organisers' presentation (Track 2, slide "Shock the System. Watch It Ripple") gives this example: "Drop a +2.5°C
+Arabian Sea heat anomaly … realistic atmospheric ripples must propagate". Shipped model (ens5). Shock = +2.5 K on t2m
+over the official Arabian Sea box (lat 8–20, lon 65–75), on every 10th day of 2020–21 (72 windows), with the judge's
+`causality_checks`:
+
+| shock | nonzero | localised | propagates | stable | no teleport |
+|---|---:|---:|---:|---:|---:|
+| +2.5 K t2m | 100% | 100% | 29% | 100% | 100% |
+| +2.5 K t2m and +15% tcwv | 100% | 100% | 33% | 100% | 100% |
+
+Why propagation is seasonal (measured; box-mean Δt2m e-folds in about 4–5 days because there is no ocean model):
+
+| start day | box wind (u, v) m/s | where the response goes on days 4–8 (energy centre, outside box) | share over land |
+|---|---|---|---:|
+| 2021-07-01 | +7.2, +0.3 (westerly monsoon flow) | 16.8 °N 72.4 °E (onto the Konkan coast) | 42% |
+| 2021-07-20 | +8.8, +2.3 | 12.7 °N 75.9 °E (onto the peninsula) | 49% |
+| 2021-01-20 | −1.3, −3.5 (north-easterly winter flow) | 8.3 °N 70.4 °E (out to sea, south-west) | 8% |
+| 2020-01-25 | −1.6, −3.8 | 8.6 °N 71.1 °E (out to sea) | 8% |
+
+The model carries the anomaly **downwind**. In monsoon months it reaches India and passes the propagation check more often.
+In winter it drifts over the open sea and partly off the grid (the box touches the domain's western edge), so by the
+judge's metric it "does not propagate". Demo it in a monsoon scenario (e.g. Konkan, July 2021).
