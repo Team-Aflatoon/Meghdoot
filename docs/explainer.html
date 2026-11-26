@@ -1578,7 +1578,7 @@ with more parameters and more data needed than a CNN of the same reach. With abo
 <h3>What each part shows</h3>
 <table>
 <tbody>
-<tr><th>Top bar</th><td>API status dot, model name, last inference time (ms), steps, and an editable API URL (default <code>http://localhost:8000</code>).</td></tr>
+<tr><th>Top bar</th><td>API status dot, model name, last inference time (ms), steps, and an editable API URL (default <code>http://127.0.0.1:8000</code>).</td></tr>
 <tr><th>Scenario card</th><td>Start state: 6 real events (Cyclone Tauktae May 2021, Cyclone Yaas May 2021, monsoon onset over Kerala June 2021, extreme Konkan rain July 2021, north India heatwave June 2019, western disturbance January 2021). Channel picker, days N (1–30), toggles: Observed panel, wind arrows, smoothing, region boxes. Scenario files hold only 3 input days + the 10 observed days that followed (<code>train/make_scenarios.py</code>); the server never reads them.</td></tr>
 <tr><th>Shock painter</th><td>Presets: <b>Warm Bay of Bengal</b> (+3 K t2m, +15% tcwv, judge's box), <b>Monsoon stall</b> (−40% u10/v10, Arabian Sea box), <b>Zero shock</b>. Or drag a rectangle on any map; add components per channel as "+ physical" or "% of last day". Shows the cells in the box and the mean Δ per channel. "Run multiverse ▶".</td></tr>
 <tr><th>Day slider</th><td>Step or play through forecast days; shows the valid date.</td></tr>

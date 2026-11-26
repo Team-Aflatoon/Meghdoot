@@ -46,7 +46,7 @@ function alpha(c, a) {           // works for rgb(), rgba(), oklch() and color()
 }
 const ICON_PLAY = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>';
 const ICON_PAUSE = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5h3v11H3zM8 1.5h3v11H8z" fill="currentColor"/></svg>';
-const DEFAULT_BASE = 'http://localhost:8000';
+const DEFAULT_BASE = 'http://127.0.0.1:8000';
 
 // ---------------------------------------------------------------- grid & channels
 const NR = 32, NC = 36, NCH = 6, NCELL = NR * NC, NOBS = 10;
