@@ -1,5 +1,5 @@
 {
- "name": "meghdoot-ens5sk",
+ "name": "meghdoot-ens10sk",
  "members": [
   {
    "file": "model_0.pt",
@@ -7,6 +7,7 @@
    "blocks": 5,
    "advect": false,
    "flux": false,
+   "diag": false,
    "from": "sk_p0"
   },
   {
@@ -15,6 +16,7 @@
    "blocks": 5,
    "advect": false,
    "flux": false,
+   "diag": false,
    "from": "sk_p1"
   },
   {
@@ -23,6 +25,7 @@
    "blocks": 5,
    "advect": false,
    "flux": false,
+   "diag": false,
    "from": "sk_p2"
   },
   {
@@ -31,6 +34,7 @@
    "blocks": 4,
    "advect": true,
    "flux": false,
+   "diag": false,
    "from": "sk_a0"
   },
   {
@@ -39,7 +43,53 @@
    "blocks": 4,
    "advect": true,
    "flux": false,
+   "diag": false,
    "from": "sk_a1"
+  },
+  {
+   "file": "model_5.pt",
+   "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "flux": false,
+   "diag": false,
+   "from": "sk_p3"
+  },
+  {
+   "file": "model_6.pt",
+   "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "flux": false,
+   "diag": false,
+   "from": "sk_p4"
+  },
+  {
+   "file": "model_7.pt",
+   "width": 96,
+   "blocks": 5,
+   "advect": false,
+   "flux": false,
+   "diag": false,
+   "from": "sk_p5"
+  },
+  {
+   "file": "model_8.pt",
+   "width": 96,
+   "blocks": 4,
+   "advect": true,
+   "flux": false,
+   "diag": false,
+   "from": "sk_a2"
+  },
+  {
+   "file": "model_9.pt",
+   "width": 96,
+   "blocks": 4,
+   "advect": true,
+   "flux": false,
+   "diag": false,
+   "from": "sk_a3"
   }
  ],
  "shock_member": 0

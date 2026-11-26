@@ -234,3 +234,16 @@ of one member: out = mean(base) + (member_k(shocked) − member_k(base)). A zero
 unshocked path (null identical 72/72). 72-window sweep by member k: k=0 13.59 (warm 93% / stall 39%), k=1 13.49, k=2 13.59,
 k=3 13.41, k=4 13.31. Shipped k=0, the first plain member, so no extra selection on the sweep windows.
 Forecast scores are unchanged by construction (dense: pooled +0.154, per-lead +0.112, CSI +0.105). Container passes, 0.36–0.48 s per call.
+
+## 10 members (shipped: `meghdoot-ens10sk`)
+
+Five more members with the same recipe and new seeds (sk_p3, sk_p4, sk_p5 plain; sk_a2, sk_a3 advection). Shock responses
+still come from member 0. Held-out 2020–21, dense 144:
+
+| | pooled SS | per-lead SS | CSI skill | causality (72) |
+|---|---:|---:|---:|---:|
+| ens5sk + shock member | +0.154 | +0.112 | +0.105 | 13.59 |
+| **ens10sk + shock member (shipped)** | **+0.156** | **+0.116** | **+0.107** | **13.59** (warm 93% / 94%, stall 39% / 99%, null 72/72) |
+
+Estimated automated total: about 68.6/70 pooled and 67.6/70 per-lead. Risk calibration refit (2021, fit 2020): heavy rain
++0.350 / +0.033 / +0.006, heat +0.633 / +0.212 / +0.059. Container: 0.51–0.66 s per call, 209 MB. Tests 15/15.
