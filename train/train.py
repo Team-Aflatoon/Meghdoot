@@ -37,6 +37,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--advect", action="store_true", help="semi-Lagrangian wind step before the CNN")
     ap.add_argument("--flux", action="store_true", help="moisture-flux input features (u10*tcwv, v10*tcwv)")
+    ap.add_argument("--diag", action="store_true", help="divergence, vorticity, moisture-flux convergence inputs")
     ap.add_argument("--skill-loss", type=float, default=0.0,
                     help="weight of the metric-aligned loss: error / error of the better baseline (persistence or climatology)")
     ap.add_argument("--prepared", default=str(ROOT.parent / "data" / "prepared.npz"))
@@ -56,14 +57,14 @@ def main() -> None:
     np.save(out / "climatology.npy", clim); np.save(out / "static.npy", static)
     shutil.copy(a.stats, out / "stats.json")
     cfg = {"name": f"stencil-{a.name}", "width": a.width, "blocks": a.blocks, "val_start": a.val_start,
-           "schedule": a.schedule, "rain_weight": a.rain_weight, "seed": a.seed, "advect": a.advect, "flux": a.flux, "skill_loss": a.skill_loss, "lr": a.lr, "batch": a.batch}
+           "schedule": a.schedule, "rain_weight": a.rain_weight, "seed": a.seed, "advect": a.advect, "flux": a.flux, "diag": a.diag, "skill_loss": a.skill_loss, "lr": a.lr, "batch": a.batch}
     (out / "config.json").write_text(json.dumps(cfg, indent=1))
 
     T = lambda x: torch.as_tensor(x, device=dev)
     D, C, S_, M = T(data), T(clim), T(np.array(st["std"], "f4")), T(np.array(st["mean"], "f4"))
     STAT, LATt, SL = T(static), T(LAT.astype("f4")), T(slots.astype("i8"))
     latw = T(lat_weights())[None, None, None, :, None]
-    net = StencilNet(a.width, a.blocks, advect=a.advect, flux=a.flux).to(dev)
+    net = StencilNet(a.width, a.blocks, advect=a.advect, flux=a.flux, diag=a.diag).to(dev)
     print(f"params={sum(p.numel() for p in net.parameters()):,} radius={net.radius} cells/step device={dev}")
 
     sched = [(int(k), int(e)) for k, e in (p.split(":") for p in a.schedule.split(","))]

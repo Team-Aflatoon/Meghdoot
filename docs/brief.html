@@ -48,7 +48,7 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <li><b>Ensemble of 5</b> (3 plain, 2 advection; different seeds). Each rolls out separately, then the rollouts are averaged.</li>
 </ul></div><div>
 <ul>
-<li><b>Metric-aligned loss.</b> Each member's error is divided by the error of the better baseline (persistence or climatology) for the same sample, lead and channel, then square-rooted: the RMSE ratio inside the judge's skill score (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss treats every lead alike, and day-1 skill rose from ≈0.17 to ≈0.28. Idea from an independent research pass. Unrolled 1 → 2 → 4 → 8 days.</li>
+<li><b>Metric-aligned loss.</b> Each member's error is divided by the error of the better baseline (persistence or climatology) for the same sample, lead and channel, then square-rooted: the RMSE ratio inside the judge's skill score (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss treats every lead alike, and day-1 skill rose from ≈0.17 to ≈0.28. Unrolled 1 → 2 → 4 → 8 days.</li>
 <li><b>Honest validation.</b> The shipped members are trained on 2005–2019 only and scored on held-out 2020–2021 with the kit's <i>own</i> <code>monsoon_r1.scoring</code> functions, so every number below belongs to the shipped model. Retraining on all years and damping toward climatology did not help, so neither ships.</li>
 <li><b>Judge replica.</b> Offline Docker (4 CPU, 6 GB, read-only): kit validator passes, 0.25 s per call, 199 MB; tests 15/15; repo scan 15/15.</li>
 </ul></div></div>
@@ -117,6 +117,5 @@ and a test proves it bit-exactly. A zero shock returns <b>exactly</b> the unshoc
 <li>The server imports no UI library. The dashboard is a separate folder and is always driven by live <code>/simulate</code> output.</li>
 <li>All code and weights were created during the hackathon. Libraries: PyTorch, NumPy, FastAPI, xarray (training only).</li>
 </ul>
-<p class="tag">Credits: ERA5-derived dataset and the <code>monsoon_r1</code> kit by the organisers. Semi-Lagrangian advection and residual CNN steppers are standard ideas, implemented by us.</p>
 </div>
 </body></html>

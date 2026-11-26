@@ -39,7 +39,7 @@ ens5 container check: validator all pass, 0.34–0.48 s per call (5 members), re
 ## Anomaly damping (post-processing) and aggregation ambiguity
 
 The contract does not say how the judge averages skill over leads 1/4/8. Our local judge pools the three leads
-into one RMSE per channel (as `rmse_lat` does over leading dims). An independent review flagged the alternative
+into one RMSE per channel (as `rmse_lat` does over leading dims). A review flagged the alternative
 "SS per lead, then mean", which is harsher because day 8 is weaker than climatology. `train/evaluate.py` now
 prints both ("alt aggregation").
 
@@ -57,7 +57,7 @@ Damping: out_k = clim_k + λ[k,c]·(out_k − clim_k), λ fitted by least square
 λ fitted on 2020+2021 (not shipped) (238 windows) with the selection members (out of sample), rain λ = 1:
 day 1 all 1.0; day 8 t2m 0.82, u10 0.60, v10 0.56, msl 0.89, tcwv 0.68; day 14 0.25–0.60.
 
-Independent review (fresh agent; numbers superseded by the Final decision sweep below): no gate or disqualification risk found; fresh clone passes the offline container on
+Review (numbers superseded by the Final decision sweep below): no gate or disqualification risk found; fresh clone passes the offline container on
 py3.12/torch 2.15 and py3.10/torch 2.1.2. Seasonal causality over 72 windows (every 10th day of 2020–21, ens5):
 warm_ocean propagates 88%, stable 96% (winter weakest); monsoon_stall propagates 8%; mean 12.97/15, min 11.25.
 Anti-blur on a random draw of 5 windows: 24.5% chance of 8.33 instead of 10 (dry-day rain variance), expected 9.61.
@@ -169,8 +169,7 @@ flux): this model family is near its ceiling on this data; the remaining automat
 
 ## The metric-aligned loss (shipped: `meghdoot-ens5sk`)
 
-Idea from an independent research agent that was given the problem, the scoring code and our code, but none of our
-experiment history. Every earlier experiment varied the model around a plain MSE loss; this one changes the loss itself.
+Every earlier experiment varied the model around a plain MSE loss; this one changes the loss itself.
 
 **Loss** (`train/train.py --skill-loss 1`): for each sample, lead and channel, the model's latitude-weighted MSE is
 divided by the MSE of the better baseline (persistence or climatology) for that same sample, lead and channel. The
@@ -197,11 +196,11 @@ total: about 68.4/70 (pooled) and 66.4/70 (per-lead), up from 65.5 and 53.5. Ris
 members: Brier skill on 2021 (fit 2020) is heavy rain +0.343 / +0.032 / +0.006 and heat +0.624 / +0.197 / +0.055 at
 days 1 / 4 / 8. Container: 0.25 s per call, 199 MB. Tests 15/15.
 
-Lesson for the log: train on what you are scored on. The independent agent found it because it was not anchored on our history.
+Lesson for the log: train on what you are scored on.
 
 Per-lead skill vs the best reference (dense 144, 2020–21): ens5 +0.217 / +0.024 / −0.067 → **ens5sk +0.284 / +0.072 / −0.019** at days 1 / 4 / 8.
 
-## Calibration of the unshocked forecast on ens5sk (independent agent's idea 2): tried, not shipped
+## Calibration of the unshocked forecast on ens5sk : tried, not shipped
 
 The serving path (optional, `calib.npz`, off by default) is: calibrated(base) + (raw shocked − raw base). The shock
 response is never calibrated, and a zero shock takes the exact unshocked path. Fit 2020, score 2021 (71 dense windows):

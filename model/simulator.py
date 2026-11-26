@@ -24,11 +24,11 @@ class Simulator:
         cfg = json.loads((weights_dir / "config.json").read_text())
         # An ensemble is a list of members; each member rolls out independently and the rollouts are averaged.
         members = cfg.get("members") or [{"file": "model.pt", "width": cfg["width"], "blocks": cfg["blocks"],
-                                          "advect": cfg.get("advect", False), "flux": cfg.get("flux", False)}]
+                                          "advect": cfg.get("advect", False), "flux": cfg.get("flux", False), "diag": cfg.get("diag", False)}]
         self.nets = []
         for mcfg in members:
             net = StencilNet(width=mcfg["width"], blocks=mcfg["blocks"], advect=mcfg.get("advect", False),
-                             flux=mcfg.get("flux", False))
+                             flux=mcfg.get("flux", False), diag=mcfg.get("diag", False))
             net.load_state_dict(torch.load(weights_dir / mcfg["file"], map_location="cpu", weights_only=True))
             self.nets.append(net.eval().to(self.device))
         self.net = self.nets[0]

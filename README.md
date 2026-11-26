@@ -16,7 +16,7 @@ Team Aflatoon. Yugaantar DevForge 2026, Track 2. The 2-page project brief is [do
 
   `tests/test_model.py::test_no_teleport_by_construction` proves this bound bit-exactly. `test_judge_teleport_check_point_shock` checks the judge's own Euclidean teleport metric.
 - **Ensemble.** The shipped model (`meghdoot-ens5sk`) averages the rollouts of 5 members (3 plain, 2 advection, different seeds).
-- **Metric-aligned loss.** Members are trained on the judge's own skill ratio instead of plain MSE: each sample's error is divided by the error of the better baseline (persistence or climatology) for the same lead and channel, then square-rooted (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss weights every lead and window as the judge does. Held-out 2020–21 (144 windows): pooled skill +0.154 (was +0.113 with MSE), per-lead skill +0.112 (was +0.058), heavy-rain CSI skill +0.105. The idea came from an independent research pass that had not seen our experiment history.
+- **Metric-aligned loss.** Members are trained on the judge's own skill ratio instead of plain MSE: each sample's error is divided by the error of the better baseline (persistence or climatology) for the same lead and channel, then square-rooted (per-lead and pooled forms mixed 50/50). Plain MSE is dominated by late leads and stormy windows; this loss weights every lead and window as the judge does. Held-out 2020–21 (144 windows): pooled skill +0.154 (was +0.113 with MSE), per-lead skill +0.112 (was +0.058), heavy-rain CSI skill +0.105.
 - **Calibrated risk maps (dashboard).** The 5 members also give probabilities of heavy rain and heat. They are blended with historical frequencies using weights fitted out of sample, and they beat "normal odds" at every lead on held-out 2021 (`train/fit_risk.py`, docs/EXPERIMENTS.md).
 - **Training.** The model is trained on its own unrolled predictions over 1 → 2 → 4 → 8 days, so rollouts stay stable.
 
@@ -60,3 +60,13 @@ Held-out 2020–21 summary for the shipped model: pooled skill +0.154, per-lead 
 ## Repository map
 `serve.py` (API) · `model/` (inference: numpy + torch only) · `train/` (data, training, local judge, ensemble, damping) ·
 `weights/` (shipped model) · `dashboard/` (static UI, calls the live `/simulate`) · `tests/` · `scripts/` (offline judge replica in Docker).
+
+## Credits
+All code and weights in this repository were written and trained during the hackathon. We used or learned from:
+
+- **Organisers (Yugaantar DevForge, Track 2):** the `monsoon_r1` team kit (API contract, schema validator, scoring functions, repo scan, dataset builder) and the `india_climate_train.nc` dataset. Our local judge (`train/evaluate.py`) imports the kit's scoring functions unchanged.
+- **Data:** ERA5 reanalysis, Copernicus Climate Change Service / ECMWF (Hersbach et al., 2020), as prepared by the organisers from WeatherBench 2.
+- **Metric-aligned loss:** the idea of training on the judge's own skill ratio came from an independent AI research pass (Claude) that saw the problem, the scoring code and our code, but not our experiment history.
+- **Standard methods:** residual CNNs, semi-Lagrangian advection, marching squares and Chaikin smoothing for the coastline, and the perceptual "plasma" and "viridis" colormaps (matplotlib).
+- **Fonts:** Host Grotesk and Atkinson Hyperlegible Mono, SIL Open Font License 1.1 (licence notice in `dashboard/fonts/README.md`).
+- **Design review:** the dashboard was reviewed and redesigned with the Hallmark and Impeccable design skills.

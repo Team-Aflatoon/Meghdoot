@@ -40,18 +40,21 @@ class StencilNet(nn.Module):
 
     MAX_DISP = 2.0
 
-    def __init__(self, width: int = 96, blocks: int = 5, advect: bool = False, flux: bool = False):
+    def __init__(self, width: int = 96, blocks: int = 5, advect: bool = False, flux: bool = False, diag: bool = False):
         super().__init__()
         self.advect = advect
         # flux=True: also feed today's moisture flux (u10*tcwv, v10*tcwv), so a wind change maps directly onto
         # moisture transport (pointwise features: locality and reach are unchanged).
         self.flux = flux
-        n_in = N_IN + (NC if advect else 0) + (2 if flux else 0)
+        # diag=True: wind divergence, relative vorticity and moisture-flux convergence from 3x3 central differences of
+        # today's state (adds one cell of reach per step).
+        self.diag = diag
+        n_in = N_IN + (NC if advect else 0) + (2 if flux else 0) + (3 if diag else 0)
         self.stem = nn.Conv2d(n_in, width, 3, padding=1, padding_mode="replicate")
         self.blocks = nn.ModuleList(Block(width) for _ in range(blocks))
         self.head = nn.Conv2d(width, NC, 1)
         nn.init.zeros_(self.head.weight); nn.init.zeros_(self.head.bias)   # starts as (advected) anomaly persistence
-        self.radius = 1 + blocks + (int(self.MAX_DISP) + 1 if advect else 0)   # max cells a signal moves per step
+        self.radius = 1 + blocks + (int(self.MAX_DISP) + 1 if advect else 0) + (1 if diag else 0)   # max cells a signal moves per step
         if advect:
             self.alpha = nn.Parameter(torch.tensor(0.5))   # wind -> steering-flow scale (learned)
 
@@ -106,6 +109,8 @@ def rollout(net, x_init, doy0, steps, clim, mean, std, static, lat):
         ang = two_pi * d_next.float() / n_doy
         sincos = torch.stack([torch.sin(ang), torch.cos(ang)], dim=1)
         feats = step_features(torch.stack(anoms[-T_IN:], 1), (clim_next - m) / s, static, sincos, lat)
+        if getattr(net, "diag", False):
+            feats = torch.cat([feats, diagnostics(x_last, std)], dim=1)
         if getattr(net, "flux", False):
             q = x_last[:, 5] / std[5]
             feats = torch.cat([feats, torch.stack([x_last[:, 2] / std[2] * q, x_last[:, 3] / std[3] * q], 1)], dim=1)
@@ -121,3 +126,24 @@ def rollout(net, x_init, doy0, steps, clim, mean, std, static, lat):
         x_last = x
         anoms.append((x - clim_next) / s)
     return torch.stack(outs, dim=1)
+
+
+def _ddx(f):
+    g = F.pad(f[:, None], (1, 1, 0, 0), mode="replicate")[:, 0]
+    return 0.5 * (g[..., 2:] - g[..., :-2])
+
+
+def _ddy(f):
+    g = F.pad(f[:, None], (0, 0, 1, 1), mode="replicate")[:, 0]
+    return 0.5 * (g[:, 2:, :] - g[:, :-2, :])
+
+
+def diagnostics(x, std):
+    """[B,6,H,W] physical state -> [B,3,H,W]: divergence, vorticity (in std(u)/cell) and moisture-flux convergence
+    (in std(u)*std(tcwv)/cell). 3x3 central differences on the grid, replicate edges."""
+    u, v, q = x[:, 2], x[:, 3], x[:, 5]
+    su, sq = std[2], std[5]
+    div = (_ddx(u) + _ddy(v)) / su
+    vort = (_ddx(v) - _ddy(u)) / su
+    mfc = -(_ddx(q * u) + _ddy(q * v)) / (su * sq)
+    return torch.stack([div, vort, mfc], dim=1)
