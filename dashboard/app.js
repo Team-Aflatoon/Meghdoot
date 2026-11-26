@@ -77,9 +77,9 @@ const RISK = [
 ];
 const isRisk = (c) => c >= NCH;
 const chInfo = (c) => (isRisk(c) ? RISK[c - NCH] : CH[c]);
-const RISK_METHOD = 'Share of the 5 ensemble members above the threshold, blended with the historical monthly frequency for that cell ' +
+const RISK_METHOD = 'Share of the 10 ensemble members above the threshold, blended with the historical monthly frequency for that cell ' +
   'using per-day weights fitted out of sample. Brier skill vs “normal odds” on held-out 2021 is positive at every lead, ' +
-  'heavy rain +0.33 / +0.03 / +0.004 and heat +0.58 / +0.20 / +0.09 at days 1 / 4 / 8, so the maps fade to normal odds when the model can’t tell.';
+  'heavy rain +0.35 / +0.03 / +0.006 and heat +0.63 / +0.21 / +0.06 at days 1 / 4 / 8, so the maps fade to normal odds when the model can’t tell.';
 const disp = (c, v) => (v + CH[c].off) * CH[c].scale;     // physical -> display units
 const dispD = (c, d) => d * CH[c].scale;                   // physical delta -> display delta
 

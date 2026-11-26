@@ -324,7 +324,7 @@ over 144 windows)."</p>
   <path class="fl" d="M210,186 H248"/>
   <text class="fs" x="12" y="266">AT THE DESK (our laptop: same server + the dashboard in a browser)</text>
   <rect class="fc" x="10" y="276" width="220" height="100" rx="8"/><text class="ft" x="22" y="300">Dashboard (browser)</text><text class="fs" x="22" y="318">scenario + shock painter</text><text class="fs" x="22" y="336">Prime, Multiverse, Δ, spread</text><text class="fs" x="22" y="354">calls the live API</text>
-  <rect class="fb" x="300" y="276" width="220" height="100" rx="8"/><text class="ft" x="312" y="300">/simulate ×2 and /risk</text><text class="fs" x="312" y="318">Prime and Multiverse rollouts;</text><text class="fs" x="312" y="336">calibrated P(heavy rain), P(heat)</text><text class="fs" x="312" y="354">from the 5 members</text>
+  <rect class="fb" x="300" y="276" width="220" height="100" rx="8"/><text class="ft" x="312" y="300">/simulate ×2 and /risk</text><text class="fs" x="312" y="318">Prime and Multiverse rollouts;</text><text class="fs" x="312" y="336">calibrated P(heavy rain), P(heat)</text><text class="fs" x="312" y="354">from the 10 members</text>
   <rect class="fc" x="590" y="276" width="400" height="100" rx="8"/><text class="ft" x="602" y="300">Impact co-pilot (in the browser)</text><text class="fs" x="602" y="318">per region: heat-stress days, N-day rain and Δ%, dry days</text><text class="fs" x="602" y="336">water-stress / heat risk HIGH-MODERATE-LOW-WET</text><text class="fs" x="602" y="354">one-line advisory per region</text>
   <path class="fl" d="M230,326 H298"/><path class="fl" d="M520,326 H588"/><path class="fl" d="M685,226 V250 H410 V274"/>
 </svg>
@@ -877,7 +877,7 @@ member first physically shifts today's anomaly field along the wind, then the CN
   <li><b>Why the blend.</b> Members trained on the same data are similar, so they agree more often than the truth justifies. Raw shares are over-confident: they say "100%" or "0%" too readily. Blending with the base rate pulls them back towards honest odds, and the weight shrinks as the lead grows (earlier 5-member fit: w_rain 0.59 → 0.03 and w_heat 0.83 → 0.33 over 10 days), so at long leads the map is mostly "normal odds for the month" with a small model signal.</li>
   <li><b>Result.</b> Brier skill against normal odds on held-out 2021 is positive at every lead for both events (<a href="#results">Results</a>). The raw shares were negative for heavy rain after day 1.</li>
 </ol>
-<p><b>Impact.</b> The Multiverse can be shown as a change in <i>probability</i> (for example "the chance of heavy rain drops under Monsoon stall"), which is easier for a decision-maker to act on than a single deterministic map. Honest limits: the skill beyond day 4 is small (heavy rain +0.004 at day 8), and 5 members cannot represent the real spread of weather.</p>
+<p><b>Impact.</b> The Multiverse can be shown as a change in <i>probability</i> (for example "the chance of heavy rain drops under Monsoon stall"), which is easier for a decision-maker to act on than a single deterministic map. Honest limits: the skill beyond day 4 is small (heavy rain +0.004 at day 8), and 10 members cannot represent the real spread of weather.</p>
 </section>
 
 
@@ -1380,7 +1380,7 @@ gradients flow straight back through the "+", which makes deeper networks traina
 <h3 id="cnn-exact">How locality gives the bit-exact "no teleport" guarantee</h3>
 <p class="tech">Every operation in a daily step computes each output cell only from input cells within its reach. So if a shock changes only cell A, then on day 1 every cell further than 6 (or 8) cells from A
 receives <i>exactly the same input numbers</i> as without the shock, does <i>exactly the same arithmetic</i>, and produces <i>exactly the same bits</i>. On day 2 the changed region can grow by another 6–8 cells, and so on.
-Averaging the 5 members and the final guards are per-cell, so they keep this property. <code>test_no_teleport_by_construction</code> puts a shock in one cell and asserts the difference beyond
+Averaging the 10 members and the final guards are per-cell, so they keep this property. <code>test_no_teleport_by_construction</code> puts a shock in one cell and asserts the difference beyond
 <code>radius × day</code> is <code>== 0.0</code>, not merely small. Contrast: in a model with attention or a global pool, that difference would be small but non-zero everywhere from day 1. Strictly, "exactly the same bits" also assumes the numerical library computes each output from its own inputs only (true of the direct convolution arithmetic; an exotic fast algorithm could in principle mix rounding across a tile). That is why we test it on the real implementation, PyTorch on CPU, instead of only arguing it.</p>
 </section>
 
