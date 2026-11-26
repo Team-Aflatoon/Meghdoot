@@ -1,8 +1,8 @@
 // Colour maps as 256-entry RGB lookup tables. No external libraries.
 'use strict';
 
-// Zero of the diverging Δ map: the dark ground (--color-paper-3). This literal is only the fallback until
-// app.js reads the token and calls setDivergingZero() with its sRGB value.
+// Zero of the diverging Δ map: the ground (--color-paper-3, dark or light by theme). This literal is only the
+// fallback until app.js reads the token and calls setDivergingZero() with its sRGB value.
 const DELTA_ZERO = '#08090c';
 const CMAP_STOPS = {
   // temperature: perceptual sequential ramp ("plasma"), cool blue-violet -> hot yellow
@@ -22,6 +22,9 @@ const CMAP_STOPS = {
   // difference: blue (negative) - dark ground (zero) - red (positive); brightness grows with |Δ|
   delta: ['#d1e5f0', '#92c5de', '#4393c3', '#2166ac', '#173a66', DELTA_ZERO,
           '#5e1622', '#b2182b', '#d6604d', '#f4a582', '#fddbc7'],
+  // the same diverging map for the light "paper" theme: zero = the light ground, depth grows with |Δ|
+  deltaLight: ['#053061', '#2166ac', '#4393c3', '#92c5de', '#d1e5f0', DELTA_ZERO,
+               '#fddbc7', '#f4a582', '#d6604d', '#b2182b', '#67001f'],
 };
 const hexRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 function fillLut(lut, rgb) {
@@ -34,7 +37,8 @@ function fillLut(lut, rgb) {
   return lut;
 }
 function deltaLut(lut, zero) {
-  const rgb = CMAP_STOPS.delta.map(hexRgb);
+  const light = 0.2126 * zero[0] + 0.7152 * zero[1] + 0.0722 * zero[2] > 128;     // light ground -> light-theme ramp
+  const rgb = CMAP_STOPS[light ? 'deltaLight' : 'delta'].map(hexRgb);
   rgb[(rgb.length - 1) / 2] = zero;
   fillLut(lut, rgb);
   // exact ground colour at the centre of the diverging map so zero renders as the panel ground
@@ -45,6 +49,7 @@ function deltaLut(lut, zero) {
 const CMAPS = (() => {
   const luts = {};
   for (const [name, s] of Object.entries(CMAP_STOPS)) {
+    if (name === 'deltaLight') continue;           // folded into CMAPS.delta by setDivergingZero()
     const lut = new Uint8ClampedArray(256 * 3);
     luts[name] = name === 'delta' ? deltaLut(lut, hexRgb(DELTA_ZERO)) : fillLut(lut, s.map(hexRgb));
   }

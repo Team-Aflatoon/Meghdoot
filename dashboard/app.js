@@ -6,6 +6,7 @@
 const APP_TITLE = 'Meghdoot';
 // Canvas chrome reads the same tokens as the CSS (tokens.css), so charts and page share one palette.
 const TH = {};
+let THEME_V = 0;                 // bumps on every theme load so cached map images re-colour
 function cssv(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function loadTheme() {
   const probe = document.createElement('span'); document.body.appendChild(probe);
@@ -13,7 +14,11 @@ function loadTheme() {
     rule: '--color-rule', accent: '--color-accent', cool: '--color-cool', ok: '--color-ok', bad: '--color-bad' })) {
     probe.style.color = `var(${v})`; TH[k] = getComputedStyle(probe).color;
   }
+  probe.style.color = 'var(--color-paper)'; TH.paper = getComputedStyle(probe).color;
   probe.remove();
+  TH.light = document.documentElement.dataset.theme === 'paper';
+  TH.halo = TH.light ? TH.paper : TH.paper3;       // label and line halos: dark on the console, light on paper
+  THEME_V++;
   TH.font = cssv('--font-body') || 'system-ui, sans-serif';
   try {                          // Δ map zero = the dark ground; resolve the token to sRGB through a 1x1 canvas
     const cv = document.createElement('canvas'); cv.width = cv.height = 1;
@@ -21,6 +26,18 @@ function loadTheme() {
     const d = x.getImageData(0, 0, 1, 1).data;
     setDivergingZero([d[0], d[1], d[2]]);
   } catch (e) { /* keep the fallback ground colour from colormaps.js */ }
+}
+// Console (dark) or paper (light, for projectors); the choice is kept in localStorage.
+function applyTheme(t, persist) {
+  const paper = t === 'paper', root = document.documentElement;
+  if (paper) root.dataset.theme = 'paper'; else delete root.dataset.theme;
+  $('themeTog').setAttribute('aria-pressed', String(paper));
+  const lab = $('themeTog').querySelector && $('themeTog').querySelector('span');
+  if (lab) lab.textContent = paper ? 'Dark' : 'Light';
+  $('themeTog').title = paper ? 'Dark console theme' : 'Light paper theme, for projectors';
+  if (persist) localStorage.setItem('mom.theme', paper ? 'paper' : 'console');
+  loadTheme();                   // re-reads every token into TH and rebuilds the Δ zero via setDivergingZero()
+  renderAll();
 }
 function alpha(c, a) {           // works for rgb(), rgba(), oklch() and color() strings
   if (/^#[0-9a-f]{6}$/i.test(c)) { const n = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)); return `rgba(${n.join(',')},${a})`; }
@@ -104,7 +121,7 @@ const S = {
   prime: null, primeSteps: 0,
   multi: null, multiSteps: 0, multiDesc: '', multiBox: null,
   shock: { box: null, comps: [], preset: null },
-  showObs: false, arrows: false, smooth: false, regions: false,
+  showObs: false, arrows: false, smooth: true, regions: false,
   city: CITY_ALL, showCities: true,
   busy: false, busyMsg: '', timer: null, drag: null, hover: null,
   rangeCache: new Map(), version: 0,
@@ -375,9 +392,119 @@ const panels = [...document.querySelectorAll('.panel')].map((el) => ({
   el, kind: el.dataset.kind, cv: el.querySelector('canvas.map'), lg: el.querySelector('canvas.legend'),
   ov: el.querySelector('.overlay'), geo: null,
 }));
-const off = document.createElement('canvas'); off.width = NC; off.height = NR;
-const offCtx = off.getContext('2d');
-const offImg = offCtx.createImageData(NC, NR);
+// Fields are drawn through an 8x upscale: values are interpolated (bilinear between cell centres, or nearest for
+// crisp cells) and only then coloured, so every pixel is a legend colour. Relief and the sea tint are a gentle
+// multiply on top (presentation only, never fed back into any number).
+const UP = 8, UW = NC * UP, UH = NR * UP;
+const UPX = (() => {             // per output column / row: the two source indices and the blend weight
+  const mk = (n, cells, flip) => {
+    const i0 = new Int16Array(n), i1 = new Int16Array(n), f = new Float32Array(n), nn = new Int16Array(n);
+    for (let k = 0; k < n; k++) {
+      const g = Math.min(cells - 1, Math.max(0, (k + 0.5) / UP - 0.5)), a = Math.floor(g), b = Math.min(a + 1, cells - 1);
+      const near = Math.min(cells - 1, Math.floor(k / UP));
+      i0[k] = flip ? cells - 1 - a : a; i1[k] = flip ? cells - 1 - b : b; f[k] = g - a; nn[k] = flip ? cells - 1 - near : near;
+    }
+    return { i0, i1, f, nn };
+  };
+  return { x: mk(UW, NC, false), y: mk(UH, NR, true) };          // y: row 0 is south, image row 0 is north
+})();
+function upsample(src, out, smooth) {
+  const X = UPX.x, Y = UPX.y;
+  for (let py = 0; py < UH; py++) {
+    if (!smooth) {
+      const ro = Y.nn[py] * NC;
+      for (let px = 0; px < UW; px++) out[py * UW + px] = src[ro + X.nn[px]];
+      continue;
+    }
+    const ra = Y.i0[py] * NC, rb = Y.i1[py] * NC, fy = Y.f[py];
+    for (let px = 0; px < UW; px++) {
+      const a = X.i0[px], b = X.i1[px], fx = X.f[px];
+      const top = src[ra + a] + (src[ra + b] - src[ra + a]) * fx, bot = src[rb + a] + (src[rb + b] - src[rb + a]) * fx;
+      out[py * UW + px] = top + (bot - top) * fy;
+    }
+  }
+  return out;
+}
+// Hillshade from orography (sun from the north-west, 45° up), as a signed deviation from flat ground, and the
+// land weight from the fractional land-sea mask; both upscaled once.
+const SHADE = { relief: null, land: null };
+function buildShade(oro, mask) {
+  const dev = new Float32Array(NCELL);
+  if (oro) {
+    const z = (r, c) => Math.sqrt(Math.max(0, oro[Math.min(NR - 1, Math.max(0, r)) * NC + Math.min(NC - 1, Math.max(0, c))]));
+    const E = 0.9, Lx = -0.5, Ly = 0.5, Lz = Math.SQRT1_2;       // azimuth 315°, altitude 45°
+    for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+      const dx = (z(r, c + 1) - z(r, c - 1)) / 2 * E, dy = (z(r + 1, c) - z(r - 1, c)) / 2 * E;   // r + 1 = north
+      const h = Math.max(0, (-dx * Lx - dy * Ly + Lz) / Math.sqrt(dx * dx + dy * dy + 1));
+      dev[r * NC + c] = Math.max(-1, Math.min(1, (h - Lz) / 0.5));
+    }
+  }
+  SHADE.relief = upsample(dev, new Float32Array(UW * UH), true);
+  SHADE.land = mask ? upsample(mask, new Float32Array(UW * UH), true) : null;
+}
+const RELIEF = { field: 0.2, delta: 0.07 }, SEA = { field: 0.08, delta: 0.04 };
+function paintField(p, f, lo, hi, lut, flat) {
+  if (!p.up) {
+    p.up = document.createElement('canvas'); p.up.width = UW; p.up.height = UH;
+    p.upCtx = p.up.getContext('2d'); p.upImg = p.upCtx.createImageData(UW, UH); p.upV = new Float32Array(UW * UH);
+  }
+  const key = [lo, hi, Object.keys(CMAPS).find((n) => CMAPS[n] === lut), S.smooth, THEME_V, flat].join('|');
+  if (p.upKey === key && p.upF && p.upF.length === f.length && p.upF.every((v, i) => v === f[i])) return p.up;
+  p.upKey = key; p.upF = Float32Array.from(f);
+  const v = upsample(f, p.upV, S.smooth), data = p.upImg.data;
+  const delta = p.kind === 'delta', rs = delta ? RELIEF.delta : RELIEF.field, ss = delta ? SEA.delta : SEA.field;
+  const rel = SHADE.relief, land = SHADE.land;
+  for (let i = 0; i < UW * UH; i++) {
+    const k = flat ? 128 : cmapIndex(v[i], lo, hi);
+    let r = lut[k * 3], g = lut[k * 3 + 1], b = lut[k * 3 + 2];
+    let m = rel ? 1 + rs * rel[i] : 1;
+    if (land) {
+      const sea = 1 - Math.min(1, Math.max(0, (land[i] - 0.3) / 0.4)), t = ss * sea;
+      if (t > 0) { const y = 0.299 * r + 0.587 * g + 0.114 * b; r += (y - r) * t; g += (y - g) * t; b += (y - b) * t; m *= 1 - 0.6 * t; }
+    }
+    const q = i * 4;
+    data[q] = r * m; data[q + 1] = g * m; data[q + 2] = b * m; data[q + 3] = 255;
+  }
+  p.upCtx.putImageData(p.upImg, 0, 0);
+  return p.up;
+}
+// Coastline: the marching-squares segments chained into polylines and rounded with two Chaikin passes.
+let COAST_LINES = [];
+function chainCoast(segs) {
+  const key = (x, y) => x.toFixed(4) + ',' + y.toFixed(4);
+  const ends = new Map(), used = new Uint8Array(segs.length);
+  segs.forEach((s, i) => { for (const k of [key(s[0], s[1]), key(s[2], s[3])]) { if (!ends.has(k)) ends.set(k, []); ends.get(k).push(i); } });
+  const next = (k) => (ends.get(k) || []).find((i) => !used[i]);
+  const lines = [];
+  segs.forEach((s0, i0) => {
+    if (used[i0]) return;
+    used[i0] = 1;
+    const pts = [[s0[0], s0[1]], [s0[2], s0[3]]];
+    for (const fwd of [true, false]) {
+      for (;;) {
+        const tip = fwd ? pts[pts.length - 1] : pts[0], k = key(tip[0], tip[1]), j = next(k);
+        if (j == null) break;
+        used[j] = 1;
+        const s = segs[j], far = key(s[0], s[1]) === k ? [s[2], s[3]] : [s[0], s[1]];
+        if (fwd) pts.push(far); else pts.unshift(far);
+      }
+    }
+    const closed = pts.length > 3 && key(...pts[0]) === key(...pts[pts.length - 1]);
+    lines.push(chaikin(chaikin(pts, closed), closed));
+  });
+  return lines;
+}
+function chaikin(pts, closed) {
+  if (pts.length < 3) return pts;
+  const out = closed ? [] : [pts[0]];
+  const n = closed ? pts.length - 1 : pts.length - 1;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[i + 1];
+    out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+  }
+  if (closed) out.push(out[0]); else out.push(pts[pts.length - 1]);
+  return out;
+}
 
 function sizeCanvas(cv, cssW, cssH) {
   const dpr = window.devicePixelRatio || 1;
@@ -457,9 +584,18 @@ function extract(arr, day0, c) {
 }
 
 function drawPanel(p) {
-  const cssW = p.cv.parentElement.clientWidth;
+  const wrap = p.cv.parentElement;
+  let cssW = wrap.clientWidth;
   const padL = 34, padR = 4, padT = 4, padB = 18;
-  const cs = (cssW - padL - padR) / NC;
+  let cs = (cssW - padL - padR) / NC;
+  // desktop grid (--map-fit: 1): the slot has a fixed height too, so fit the map to the smaller of the two
+  const fit = getComputedStyle(p.el).getPropertyValue('--map-fit').trim() === '1';
+  if (fit && wrap.clientHeight > 0) {
+    cs = Math.max(2, Math.min(cs, (wrap.clientHeight - padT - padB) / NR));
+    cssW = Math.floor(cs * NC + padL + padR);
+  }
+  p.cv.style.width = fit ? cssW + 'px' : '';
+  p.lg.style.width = fit ? cssW + 'px' : '';
   const cssH = Math.round(cs * NR + padT + padB);
   const ctx = sizeCanvas(p.cv, cssW, cssH);
   p.geo = { left: padL, top: padT, cs, w: cs * NC, h: cs * NR };
@@ -483,16 +619,9 @@ function drawPanel(p) {
   p.scale = { lo, hi, lut };
 
   if (res.f) {
-    const data = offImg.data;
-    for (let r = 0; r < NR; r++) for (let col = 0; col < NC; col++) {
-      const v = res.f[r * NC + col];
-      const k = (p.kind === 'delta' && hi === 0) ? 128 : cmapIndex(v, lo, hi);
-      const q = ((NR - 1 - r) * NC + col) * 4;
-      data[q] = lut[k * 3]; data[q + 1] = lut[k * 3 + 1]; data[q + 2] = lut[k * 3 + 2]; data[q + 3] = 255;
-    }
-    offCtx.putImageData(offImg, 0, 0);
-    ctx.imageSmoothingEnabled = S.smooth;
-    ctx.drawImage(off, g.left, g.top, g.w, g.h);
+    const img = paintField(p, res.f, lo, hi, lut, p.kind === 'delta' && hi === 0);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, g.left, g.top, g.w, g.h);
   }
   p.field = res.f || null;
 
@@ -515,11 +644,13 @@ function drawPanel(p) {
   // coastline
   const X = (fc) => g.left + (fc + 0.5) * cs, Y = (fr) => g.top + (NR - 0.5 - fr) * cs;
   const strokeCoast = (style, wdt) => {
-    ctx.strokeStyle = style; ctx.lineWidth = wdt; ctx.lineCap = 'round'; ctx.beginPath();
-    for (const s of S.coast) { ctx.moveTo(X(s[0]), Y(s[1])); ctx.lineTo(X(s[2]), Y(s[3])); }
+    ctx.strokeStyle = style; ctx.lineWidth = wdt; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
+    for (const ln of COAST_LINES) ln.forEach((q, k) => (k ? ctx.lineTo(X(q[0]), Y(q[1])) : ctx.moveTo(X(q[0]), Y(q[1]))));
     ctx.stroke();
   };
-  strokeCoast(alpha(TH.paper3, 0.8), 3); strokeCoast(alpha(TH.ink, 0.9), 1.2);
+  ctx.save(); ctx.beginPath(); ctx.rect(g.left, g.top, g.w, g.h); ctx.clip();
+  strokeCoast(alpha(TH.halo, 0.7), 2.75); strokeCoast(alpha(TH.ink, 0.92), 1.25);
+  ctx.restore();
 
   // wind arrows
   if (S.arrows && p.kind !== 'delta') drawArrows(ctx, p, g, day0);
@@ -550,7 +681,7 @@ function drawPanel(p) {
   if (box) {
     const [x, y, w, h] = rectDeg(box);
     ctx.setLineDash([]);
-    ctx.strokeStyle = TH.paper3; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+    ctx.strokeStyle = TH.halo; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
     ctx.strokeStyle = TH.accent; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
   }
 
@@ -572,16 +703,16 @@ function drawCities(ctx, g) {
     if (!sel && !S.showCities) return;
     const [x, y] = cityXY(g, ct);
     if (sel) {
-      ctx.strokeStyle = alpha(TH.paper3, 0.8); ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
+      ctx.strokeStyle = alpha(TH.halo, 0.8); ctx.lineWidth = 3; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
       ctx.strokeStyle = TH.cool; ctx.lineWidth = 1.5; ctx.strokeRect(g.left + ct.col * g.cs, g.top + (NR - 1 - ct.r) * g.cs, g.cs, g.cs);
     }
     ctx.beginPath(); ctx.arc(x, y, sel ? 3.6 : 2.3, 0, 7);
     ctx.fillStyle = sel ? TH.cool : TH.ink; ctx.fill();
-    ctx.strokeStyle = sel ? TH.ink : alpha(TH.paper3, 0.9); ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
+    ctx.strokeStyle = sel ? TH.ink : alpha(TH.halo, 0.9); ctx.lineWidth = sel ? 1.4 : 1; ctx.stroke();
     const t = sel ? ct.name : ct.short, tx = x + ct.dx * (sel ? 6 : 4.5);
     ctx.textAlign = ct.dx > 0 ? 'left' : 'right';
     ctx.font = (sel ? '600 13px' : '11px') + ' ' + TH.font;
-    ctx.strokeStyle = alpha(TH.paper3, 0.85); ctx.lineWidth = 3; ctx.strokeText(t, tx, y);
+    ctx.strokeStyle = alpha(TH.halo, 0.85); ctx.lineWidth = 3; ctx.strokeText(t, tx, y);
     ctx.fillStyle = TH.ink; ctx.fillText(t, tx, y);
   });
 }
@@ -600,7 +731,7 @@ function drawArrows(ctx, p, g, day0) {
     const L = Math.min(sp * scale, cs * 3.2), ux = u / sp, uy = -v / sp;
     const x0 = g.left + (col + 0.5) * cs - ux * L / 2, y0 = g.top + (NR - 0.5 - r) * cs - uy * L / 2;
     const x1 = x0 + ux * L, y1 = y0 + uy * L, hl = Math.min(5, L * 0.45);
-    for (const [st, w] of [[alpha(TH.paper3, 0.75), 2.6], [TH.ink, 1.1]]) {
+    for (const [st, w] of [[alpha(TH.halo, 0.75), 2.6], [TH.ink, 1.1]]) {
       ctx.strokeStyle = st; ctx.lineWidth = w; ctx.beginPath();
       ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
       ctx.moveTo(x1, y1); ctx.lineTo(x1 - hl * (ux * 0.85 - uy * 0.5), y1 - hl * (uy * 0.85 + ux * 0.5));
@@ -633,6 +764,67 @@ function drawLegend(p) {
   ctx.textAlign = 'right'; ctx.fillText(lbl(hi), x0 + w, y0 + h + 3);
 }
 
+// ---------------------------------------------------------------- chart drawing helpers (presentation only)
+// Monotone cubic (Fritsch–Carlson) through the points, traced in short lineTo steps: smooth, never overshoots.
+function traceMono(ctx, xs, ys, start = true) {
+  const n = xs.length;
+  if (!n) return;
+  if (start) ctx.moveTo(xs[0], ys[0]); else ctx.lineTo(xs[0], ys[0]);
+  if (n === 1) return;
+  const d = [], m = new Array(n);
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i] || 1));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], q = a * a + b * b;
+    if (q > 9) { const t = 3 / Math.sqrt(q); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const h = xs[i + 1] - xs[i];
+    for (let k = 1; k <= 8; k++) {
+      const t = k / 8, t2 = t * t, t3 = t2 * t;
+      ctx.lineTo(xs[i] + h * t, (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * h * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * h * m[i + 1]);
+    }
+  }
+}
+// a series: soft area down to `area` (optional), 2 px smooth stroke with round joins, small dots
+function drawSeries(ctx, xs, ys, col, o = {}) {
+  if (o.area != null) {
+    ctx.beginPath(); traceMono(ctx, xs, ys);
+    ctx.lineTo(xs[xs.length - 1], o.area); ctx.lineTo(xs[0], o.area); ctx.closePath();
+    ctx.fillStyle = alpha(col, o.areaAlpha || 0.1); ctx.fill();
+  }
+  ctx.strokeStyle = col; ctx.lineWidth = o.width || 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.setLineDash(o.dash || []); ctx.beginPath(); traceMono(ctx, xs, ys); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = col;
+  xs.forEach((x, k) => { ctx.beginPath(); ctx.arc(x, ys[k], o.dot || 2.2, 0, 7); ctx.fill(); });
+}
+// bar with a 2 px rounded top (body as a rect, cap as a path)
+function roundBar(ctx, x, y, w, h) {
+  const r = Math.min(2, w / 2, Math.max(0, h));
+  ctx.fillRect(x, y + r, w, Math.max(0, h - r));
+  if (r > 0.25) {
+    ctx.beginPath(); ctx.moveTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + r); ctx.closePath(); ctx.fill();
+  }
+}
+const hair = (v) => Math.round(v) + 0.5;      // a 1 px line on a crisp half pixel
+// legend strip: small square swatches with labels, left to right, wrapping; returns the rows used
+function legendStrip(ctx, items, x0, y0, maxX) {
+  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  let x = x0, row = 0;
+  for (const [col, t] of items) {
+    const iw = 14 + ctx.measureText(t).width;
+    if (x > x0 && x + iw > maxX) { x = x0; row++; }
+    const y = y0 + row * 16;
+    ctx.fillStyle = col; ctx.fillRect(x, y - 4, 8, 8);
+    ctx.fillStyle = TH.ink2; ctx.fillText(t, x + 13, y);
+    x += iw + 16;
+  }
+  return row + 1;
+}
+
 // ---------------------------------------------------------------- spread analysis
 function computeSpread() {
   S.spread = null;
@@ -663,16 +855,10 @@ function drawSpread() {
   const ctx = sizeCanvas(cv, cssW, cssH);
   ctx.clearRect(0, 0, cssW, cssH);
   ctx.font = `12px ${TH.font}`;
-  // legend items are laid out first, in a strip above the plot (wrapping if narrow), so they never cover the data
-  const lg = [[TH.accent, 'near box (≤2 cells)', 4], [TH.ink2, 'far from box', 4], [alpha(TH.ink, 0.15), 'reach, right axis', 10]];
-  const lgPos = []; let lgx = 4, lgRow = 0;
-  for (const it of lg) {
-    const iw = 16 + ctx.measureText(it[1]).width;
-    if (lgx > 4 && lgx + iw > cssW - 4) { lgx = 4; lgRow++; }
-    lgPos.push([lgx, 10 + lgRow * 16]); lgx += iw + 20;
-  }
-  const L = 52, R = 44, T = 22 + lgRow * 16, B = 24, w = cssW - L - R, h = cssH - T - B;
   const sp = S.spread;
+  // legend strip above the plot (wrapping if narrow), so it never covers the data
+  const lgRows = sp ? legendStrip(ctx, [[TH.accent, 'near box (≤2 cells)'], [TH.ink2, 'far from box'], [alpha(TH.ink, 0.22), 'reach, right axis']], 4, 9, cssW - 4) : 1;
+  const L = 52, R = 44, T = 14 + lgRows * 16, B = 24, w = cssW - L - R, h = cssH - T - B;
   if (!sp) {
     ctx.fillStyle = TH.muted; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(S.online === false ? 'Server offline' : 'Run a multiverse to see how the shock spreads', cssW / 2, cssH / 2);
@@ -690,14 +876,14 @@ function drawSpread() {
   const maxReach = Math.max(4, ...sp.reach.map((r) => r || 0));
   const Yr = (r) => T + h - (r / maxReach) * h;
 
-  // axes & grid
-  ctx.strokeStyle = alpha(TH.ink, 0.08); ctx.fillStyle = TH.muted; ctx.lineWidth = 1;
+  // hairline grid, muted 12 px ticks, no frame
+  ctx.strokeStyle = TH.rule; ctx.fillStyle = TH.muted; ctx.lineWidth = 1; ctx.font = `12px ${TH.font}`;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   const stepDec = Math.max(1, Math.ceil((top - bot) / 5));
   const decTxt = (e) => (e >= 0 ? String(Math.pow(10, e)) : e >= -5 ? Math.pow(10, e).toFixed(-e) : '1e' + e);
   for (let e = bot; e <= top; e += stepDec) {
-    const y = Yl(Math.pow(10, e)); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke();
-    ctx.fillText(decTxt(e), L - 4, y);
+    const y = Yl(Math.pow(10, e)); ctx.beginPath(); ctx.moveTo(L, hair(y)); ctx.lineTo(L + w, hair(y)); ctx.stroke();
+    ctx.fillText(decTxt(e), L - 6, y);
   }
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   for (let d = 0; d < N; d++) if (N <= 15 || d % 2 === 0) ctx.fillText('d' + (d + 1), X(d), T + h + 4);
@@ -706,28 +892,23 @@ function drawSpread() {
   ctx.save(); ctx.translate(cssW - 7, T + h / 2); ctx.rotate(Math.PI / 2);       // right axis title, once
   ctx.textAlign = 'center'; ctx.fillText('reach (cells)', 0, 0); ctx.restore();
 
-  // reach bars
+  // current day: a subtle band and a thin amber line, matching the map day
+  const cd = S.day - 1, step = N > 1 ? w / (N - 1) : w;
+  if (cd < N) {
+    const bwd = Math.min(28, step * 0.7);
+    ctx.fillStyle = alpha(TH.accent, 0.08); ctx.fillRect(X(cd) - bwd / 2, T, bwd, h);
+    ctx.strokeStyle = alpha(TH.accent, 0.85); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hair(X(cd)), T); ctx.lineTo(hair(X(cd)), T + h); ctx.stroke();
+  }
+
+  // reach bars, rounded tops
   const bw = Math.max(3, Math.min(14, w / N * 0.35));
-  ctx.fillStyle = alpha(TH.ink, 0.15);
-  sp.reach.forEach((r, d) => { if (r != null) ctx.fillRect(X(d) - bw / 2, Yr(r), bw, T + h - Yr(r)); });
+  ctx.fillStyle = alpha(TH.ink, 0.22);
+  sp.reach.forEach((r, d) => { if (r != null) roundBar(ctx, X(d) - bw / 2, Yr(r), bw, T + h - Yr(r)); });
 
-  // current day
-  const cd = S.day - 1;
-  if (cd < N) { ctx.strokeStyle = alpha(TH.accent, 0.6); ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(cd), T); ctx.lineTo(X(cd), T + h); ctx.stroke(); ctx.setLineDash([]); }
-
-  const line = (arr, col) => {
-    ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
-    arr.forEach((v, d) => (d ? ctx.lineTo(X(d), Yl(v)) : ctx.moveTo(X(d), Yl(v)))); ctx.stroke();
-    ctx.fillStyle = col; arr.forEach((v, d) => { ctx.beginPath(); ctx.arc(X(d), Yl(v), 2.6, 0, 7); ctx.fill(); });
-  };
-  line(sp.near, TH.accent); line(sp.far, TH.ink2);
-
-  // legend, in the strip above the plot
-  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-  lg.forEach(([col, t, sw], k) => {
-    const [lx, ly] = lgPos[k];
-    ctx.fillStyle = col; ctx.fillRect(lx, ly - sw / 2, 12, sw); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 16, ly);
-  });
+  const xs = sp.near.map((v, d) => X(d));
+  drawSeries(ctx, xs, sp.far.map(Yl), TH.ink2);
+  drawSeries(ctx, xs, sp.near.map(Yl), TH.accent);
 
   const zero = all.length === 0;
   $('reachRow').innerHTML = zero
@@ -952,14 +1133,14 @@ function drawCityChart(cv, D) {
   const rhi = Math.max(1, ...series('rain')) * 1.1;
   const YT = (v) => yT0 + hh - (v - tlo) / (thi - tlo) * hh;
   const YR = (v) => yR0 + hh - v / rhi * hh;
-  // gridlines + axis labels
-  ctx.strokeStyle = alpha(TH.ink, 0.08); ctx.lineWidth = 1; ctx.fillStyle = TH.muted;
+  // hairline gridlines + muted 12 px axis labels, no frame
+  ctx.strokeStyle = TH.rule; ctx.lineWidth = 1; ctx.fillStyle = TH.muted; ctx.font = `12px ${TH.font}`;
   ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
   const ticks = (lo, hi) => {
     const sp = hi - lo, st = sp > 120 ? 50 : sp > 60 ? 20 : sp > 25 ? 10 : sp > 12 ? 5 : sp > 5 ? 2 : sp > 2.5 ? 1 : 0.5;
     const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v); return out;
   };
-  const grid = (vals, Y) => { for (const v of vals) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(L + w, y); ctx.stroke(); ctx.fillText(v.toFixed(v % 1 ? 1 : 0), L - 4, y); } };
+  const grid = (vals, Y) => { for (const v of vals) { const y = Y(v); ctx.beginPath(); ctx.moveTo(L, hair(y)); ctx.lineTo(L + w, hair(y)); ctx.stroke(); ctx.fillText(v.toFixed(v % 1 ? 1 : 0), L - 6, y); } };
   const ticks3 = (lo, hi) => {        // temperature panel: the finest round step that gives at most 3 ticks
     for (const st of [0.5, 1, 2, 5, 10, 20, 50]) {
       const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi; v += st) out.push(v);
@@ -973,29 +1154,32 @@ function drawCityChart(cv, D) {
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   const every = N <= 15 ? 1 : 2, cd = S.day - 1;
   for (let d = 0; d < N; d++) if (d % every === 0 || d === cd) ctx.fillText('d' + (d + 1), X(d), yR0 + hh + 3);
-  // current day (from the day slider)
+  // current day (from the day slider): a subtle band and a thin amber line
   if (cd >= 0 && cd < N) {
-    ctx.fillStyle = alpha(TH.accent, 0.13); ctx.fillRect(L + cd * bw, yT0, bw, yR0 + hh - yT0);
-    ctx.strokeStyle = alpha(TH.accent, 0.55); ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(X(cd), yT0); ctx.lineTo(X(cd), yR0 + hh); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = alpha(TH.accent, 0.08); ctx.fillRect(L + cd * bw, yT0, bw, yR0 + hh - yT0);
+    ctx.strokeStyle = alpha(TH.accent, 0.85); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hair(X(cd)), yT0); ctx.lineTo(hair(X(cd)), yR0 + hh); ctx.stroke();
   }
-  // rain: Prime | Multiverse bars side by side; observed as a dashed line
-  const nb = D.M ? 2 : 1, barW = Math.max(2, Math.min(16, bw * (D.M ? 0.34 : 0.55)));
-  const bars = (a, col, k) => { ctx.fillStyle = col; a.forEach((v, d) => { const x = X(d) - nb * barW / 2 + k * barW; ctx.fillRect(x, YR(v), barW - 1, yR0 + hh - YR(v)); }); };
-  bars(D.P.rain, PC, 0); if (D.M) bars(D.M.rain, MC, 1);
-  const line = (a, col, Y, dash, wd = 2) => {
-    ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.setLineDash(dash); ctx.beginPath();
-    a.forEach((v, d) => (d ? ctx.lineTo(X(d), Y(v)) : ctx.moveTo(X(d), Y(v)))); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = col; a.forEach((v, d) => { ctx.beginPath(); ctx.arc(X(d), Y(v), 2.2, 0, 7); ctx.fill(); });
+  // rain: Prime | Multiverse bars side by side with a 2 px gap, rounded tops
+  const nb = D.M ? 2 : 1, GAPB = D.M ? 2 : 0, barW = Math.max(2, Math.min(14, bw * (D.M ? 0.3 : 0.5)));
+  const bars = (a, col, k) => {
+    ctx.fillStyle = col;
+    a.forEach((v, d) => { const x = X(d) - (nb * barW + GAPB) / 2 + k * (barW + GAPB); roundBar(ctx, x, YR(v), barW, yR0 + hh - YR(v)); });
   };
-  if (D.O) { line(D.O.t, OC, YT, [4, 3], 1.5); line(D.O.rain, OC, YR, [4, 3], 1.5); }
-  line(D.P.t, PC, YT, []);
-  if (D.M) line(D.M.t, MC, YT, []);
-  // legend + current-day values
-  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  bars(D.P.rain, PC, 0); if (D.M) bars(D.M.rain, MC, 1);
+  // temperature: soft area under Prime and Multiverse, smooth 2 px lines; observed dotted grey with small dots
+  const xsOf = (a) => Array.from(a, (v, d) => X(d)), ysOf = (a, Y) => Array.from(a, Y);
+  drawSeries(ctx, xsOf(D.P.t), ysOf(D.P.t, YT), PC, { area: yT0 + hh, areaAlpha: 0.1 });
+  if (D.M) drawSeries(ctx, xsOf(D.M.t), ysOf(D.M.t, YT), MC, { area: yT0 + hh, areaAlpha: 0.08 });
+  if (D.O) {
+    const obs = { dash: [1, 3.5], width: 1.75, dot: 1.8 };
+    drawSeries(ctx, xsOf(D.O.t), ysOf(D.O.t, YT), OC, obs);
+    drawSeries(ctx, xsOf(D.O.rain), ysOf(D.O.rain, YR), OC, obs);
+  }
+  // legend strip + current-day values
   const lg = [[PC, 'Prime']]; if (D.M) lg.push([MC, 'Multiverse']); if (D.O) lg.push([OC, `Observed (d1–${D.nObs})`]);
-  let lx = L + 2;
-  for (const [col, t] of lg) { ctx.fillStyle = col; ctx.fillRect(lx, 7, 12, 3); ctx.fillStyle = TH.ink2; ctx.fillText(t, lx + 16, 8.5); lx += ctx.measureText(t).width + 32; }
+  legendStrip(ctx, lg, L, 8.5, cssW);
+  ctx.font = `12px ${TH.font}`; ctx.textBaseline = 'middle';
   if (cd >= 0 && cd < N) {
     ctx.textAlign = 'right'; ctx.fillStyle = TH.muted;
     ctx.fillText(`day ${S.day}: ${fmt(D.P.t[cd], 1)} °C, ${fmt(D.P.rain[cd], 1)} mm` +
@@ -1087,7 +1271,7 @@ function renderAll() {
     $('subDelta').textContent = S.multiMaxAll === 0 ? 'max |Δ| = 0 exactly, Multiverse ≡ Prime'
       : rk && !(riskOk('prime') && riskOk('multi')) ? `${ch.key}, percentage points`
       : `max |Δ| ${ch.key} (all days) = ${rk ? m.toFixed(1) : m.toPrecision(3)} ${ch.dUnit}`;
-  } else $('subDelta').textContent = 'diverging, symmetric, dark = 0';
+  } else $('subDelta').textContent = `diverging, symmetric, ${TH.light ? 'light' : 'dark'} = 0`;
   renderReadout();
 }
 
@@ -1230,6 +1414,7 @@ async function init() {
   };
   $('obsTog').onchange = () => { S.showObs = $('obsTog').checked; $('panelObs').hidden = !S.showObs; renderAll(); };
   $('arrowTog').onchange = () => { S.arrows = $('arrowTog').checked; renderAll(); };
+  $('smoothTog').checked = S.smooth;
   $('smoothTog').onchange = () => { S.smooth = $('smoothTog').checked; renderAll(); };
   $('regionTog').onchange = () => { S.regions = $('regionTog').checked; renderAll(); };
   $('citySel').add(new Option('All India (land average)', CITY_ALL));
@@ -1241,7 +1426,8 @@ async function init() {
   $('cityTog').checked = S.showCities;
   $('cityTog').onchange = () => { S.showCities = $('cityTog').checked; renderAll(); };
   $('daySl').oninput = () => setDay(+$('daySl').value);
-  loadTheme(); $('playBtn').innerHTML = ICON_PLAY;
+  applyTheme(localStorage.getItem('mom.theme') === 'paper' ? 'paper' : 'console', false); $('playBtn').innerHTML = ICON_PLAY;
+  $('themeTog').onclick = () => applyTheme(TH.light ? 'console' : 'paper', true);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { loadTheme(); renderAll(); });
   $('playBtn').onclick = togglePlay;
   $('runBtn').onclick = runMultiverse;
@@ -1275,6 +1461,10 @@ async function init() {
     S.mask = flatten(st.land_sea_mask, [NR, NC]);
     S.land = Uint8Array.from(S.mask, (v) => (v >= 0.5 ? 1 : 0));
     S.coast = coastline(S.mask);
+    COAST_LINES = chainCoast(S.coast);
+    let oro = null;
+    try { oro = st.orography_km ? flatten(st.orography_km, [NR, NC]) : null; } catch (e) { oro = null; }   // relief is optional
+    buildShade(oro, S.mask);
     idx.forEach((s) => $('scenSel').add(new Option(s.label, s.key)));
   } catch (e) {
     $('scenSub').textContent = 'Could not load scenarios/, serve this folder with: python -m http.server 5173';
