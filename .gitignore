@@ -9,3 +9,9 @@ runs/
 .env
 node_modules/
 .hallmark/
+
+# internal / source docs (not part of the submission)
+CLAUDE.md
+docs/brief.html
+docs/pitch.html
+docs/explainer.html
